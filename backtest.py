@@ -14,8 +14,8 @@
   - 연말(그 해 마지막 미국 증시 거래일 종가) 리밸런싱
 
 비교 대상
-  - QLD 100% 장기보유
-  - QLD 200일선 전략 단독 (참고용)
+  - 동일 포트폴리오에서 QLD 25%만 추세추종 대신 장기보유
+    (금 30%, 비트코인 120일선 30%, SGOV 15%, 연말 리밸런싱은 동일)
 
 거래비용/세금/슬리피지는 반영하지 않음.
 """
@@ -126,23 +126,23 @@ def main():
     rebal_days = set(s.groupby(s.index.year).max())
     rebal_days = {d for d in rebal_days if d.month == 12 and d.day >= 24}
 
-    vals = pd.Series(WEIGHTS) * 1.0
-    eq = []
-    for d in sim_days:
-        if d != start_day:
-            vals = vals * (1 + sleeve_r.loc[d])
-        total = vals.sum()
-        if d in rebal_days:
-            vals = pd.Series(WEIGHTS) * total
-        eq.append(total)
-    port = pd.Series(eq, index=sim_days)
+    def simulate(sr):
+        vals = pd.Series(WEIGHTS) * 1.0
+        eq = []
+        for d in sim_days:
+            if d != start_day:
+                vals = vals * (1 + sr.loc[d])
+            total = vals.sum()
+            if d in rebal_days:
+                vals = pd.Series(WEIGHTS) * total
+            eq.append(total)
+        return pd.Series(eq, index=sim_days)
 
-    # 비교: QLD 장기보유, QLD 200일선 단독
-    bh = (1 + r_qld.loc[sim_days].where(sim_days != start_day, 0)).cumprod()
-    q_only = (1 + sleeve_r["QLD"].loc[sim_days].where(sim_days != start_day, 0)).cumprod()
+    port = simulate(sleeve_r)
+    # 비교: QLD 25%를 장기보유로 바꾼 동일 포트폴리오
+    port_bh = simulate(sleeve_r.assign(QLD=r_qld))
 
-    curves = {"전략 포트폴리오": port, "QLD 장기보유": bh, "QLD 200일선 단독(참고)": q_only}
-    # 주식 거래일 기준으로 비교 (주말 BTC 변동 포함하되 샘플링은 거래일)
+    curves = {"QLD 추세추종 포트폴리오": port, "QLD 장기보유 포트폴리오": port_bh}
     st = pd.DataFrame({k: stats(v) for k, v in curves.items()}).T
 
     yearly = pd.DataFrame({k: v.groupby(v.index.year).last() for k, v in curves.items()})
