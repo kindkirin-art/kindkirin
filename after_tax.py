@@ -9,6 +9,7 @@ TQQQ 전략 vs QLD 전략 세후 백테스트 (한국 거주자 기준)
   - 비트코인(현물 직접 보유): 가상자산 과세 2027년 시행 예정이므로 비과세
   - 양도세는 다음 해 5월 말에 SGOV(15% 칸)에서 납부
   - 환율 변동, 금융소득종합과세, 거래비용은 미반영
+"TQQQ 30% 전략"은 TQQQ 30 / 금 30 / 비트코인 30 / SGOV 10 비중.
 결과는 '청산 안 함'(마지막 해 미납 세금만 차감)과 '기말 전량 청산'(미실현 이익까지 과세) 두 가지.
 """
 import sys
@@ -23,6 +24,7 @@ END = pd.Timestamp(sys.argv[1]) if len(sys.argv) > 1 else pd.Timestamp.today().n
 START = pd.Timestamp(sys.argv[2]) if len(sys.argv) > 2 else END - pd.DateOffset(years=10)
 WARMUP = START - pd.DateOffset(years=2)
 CGT, DIV_TAX = 0.22, 0.154
+W_TQQQ30 = {"LEV": 0.30, "GLD": 0.30, "BTC": 0.30, "CASH": 0.10}  # TQQQ 30% / SGOV 10% 변형
 
 
 def load():
@@ -61,7 +63,7 @@ def main():
     rebal = {d for d in yr.groupby(yr.index.year).max() if d.month == 12 and d.day >= 24}
     pay_day = {d: d.year for d in yr[yr.index.month == 5].groupby(yr[yr.index.month == 5].index.year).max()}
 
-    def simulate(asset, sig, ladder, taxed=True):
+    def simulate(asset, sig, ladder, taxed=True, w=WEIGHTS):
         cgt = CGT if taxed else 0.0
         dtx = DIV_TAX if taxed else 0.0
         rc = r_cash.where(r_cash <= 0, r_cash * (1 - dtx))
@@ -69,9 +71,9 @@ def main():
         sig = sig.reindex(cal).ffill().fillna(0)
         p_lev = price[asset]
         tkr = {"lev": asset, "schd": "SCHD", "GLD": "GLD"}
-        v = {"lev": 0.0, "schd": 0.0, "GLD": WEIGHTS["GLD"],
-             "cash": WEIGHTS["LEV"], "BTC": WEIGHTS["BTC"], "CASH": WEIGHTS["CASH"]}
-        b = {"lev": 0.0, "schd": 0.0, "GLD": WEIGHTS["GLD"]}  # 취득가액
+        v = {"lev": 0.0, "schd": 0.0, "GLD": w["GLD"],
+             "cash": w["LEV"], "BTC": w["BTC"], "CASH": w["CASH"]}
+        b = {"lev": 0.0, "schd": 0.0, "GLD": w["GLD"]}  # 취득가액
         realized, paid = {}, {}
         state, avg, level = 0, np.nan, 0
         eq = []
@@ -125,16 +127,16 @@ def main():
             total = sum(v.values())
             if d in rebal:
                 sleeve = v["lev"] + v["schd"] + v["cash"]
-                k = WEIGHTS["LEV"] * total / sleeve
+                k = w["LEV"] * total / sleeve
                 if k > 1 and v["lev"] > 0:
                     avg = (avg + (k - 1) * p_lev[d]) / k
                 for x in ("lev", "schd"):
                     (sell(x, v[x] * (1 - k), d) if k < 1 else buy(x, v[x] * (k - 1)))
                 v["cash"] *= k
-                g = WEIGHTS["GLD"] * total - v["GLD"]
+                g = w["GLD"] * total - v["GLD"]
                 (buy("GLD", g) if g > 0 else sell("GLD", -g, d))
-                v["BTC"] = WEIGHTS["BTC"] * total
-                v["CASH"] = WEIGHTS["CASH"] * total
+                v["BTC"] = w["BTC"] * total
+                v["CASH"] = w["CASH"] * total
             eq.append(total)
 
         eq = pd.Series(eq, index=sim_days)
@@ -149,7 +151,8 @@ def main():
     ixic_sig = ma_signal(adj["^IXIC"].loc[stock_days])
     specs = {"TQQQ 전략": ("TQQQ", tqqq_sig, LADDER), "QLD 전략": ("QLD", ixic_sig, []),
              "TQQQ 익절 없음": ("TQQQ", tqqq_sig, []),
-             "QLD 장기보유": ("QLD", pd.Series(1, index=stock_days), [])}
+             "QLD 장기보유": ("QLD", pd.Series(1, index=stock_days), []),
+             "TQQQ 30% 전략": ("TQQQ", tqqq_sig, LADDER, W_TQQQ30)}
 
     years = (sim_days[-1] - sim_days[0]).days / 365.25
 
@@ -158,11 +161,18 @@ def main():
         cagr = final ** (1 / years) - 1
         return cagr, dd, final
 
-    res, rows = {}, {}
-    for name, (asset, sig, lad) in specs.items():
-        pre = simulate(asset, sig, lad, taxed=False)[0]
-        eq, owed, liq, realized, paid = simulate(asset, sig, lad)
+    res, rows, pre_tbl = {}, {}, {}
+    for name, (asset, sig, lad, *w) in specs.items():
+        w = w[0] if w else WEIGHTS
+        pre = simulate(asset, sig, lad, taxed=False, w=w)[0]
+        eq, owed, liq, realized, paid = simulate(asset, sig, lad, w=w)
         res[name] = (pre, eq, owed, liq, realized, paid)
+        prev = pre.iloc[0]
+        for y, g in pre.groupby(pre.index.year):
+            path = pd.concat([pd.Series([prev]), g.reset_index(drop=True)])
+            pre_tbl.setdefault(y, {})[f"{name} 수익률"] = f"{g.iloc[-1] / prev - 1:.1%}"
+            pre_tbl[y][f"{name} MDD"] = f"{(path / path.cummax() - 1).min():.1%}"
+            prev = g.iloc[-1]
         for label, e, fin in [("세전", pre, pre.iloc[-1]),
                               ("세후 (청산 안 함)", eq, eq.iloc[-1] - owed),
                               ("세후 (기말 전량 청산)", eq, eq.iloc[-1] - liq)]:
@@ -175,6 +185,9 @@ def main():
     print(f"기간: {sim_days[0].date()} ~ {sim_days[-1].date()}")
     print("\n[성과 요약]")
     print(pd.DataFrame(rows).T.to_string())
+
+    print("\n[연도별 세전 수익률 / 연중 MDD]")
+    print(pd.DataFrame(pre_tbl).T.to_string())
 
     print("\n[세금 합계 (초기 투자금 = 1 기준)]")
     for name, (pre, eq, owed, liq, realized, paid) in res.items():
