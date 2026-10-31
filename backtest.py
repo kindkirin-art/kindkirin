@@ -152,8 +152,10 @@ def main():
     ref = {"TQQQ 전략 (익절 없음)": simulate("TQQQ", tqqq_sig, [])[0]}
     sl = dict(sleeves)
     ref["TQQQ 전략 (신호를 ^IXIC로)"] = simulate("TQQQ", ixic_sig, LADDER)[0]
+    ref["QLD 장기보유"] = simulate("QLD", pd.Series(1, index=stock_days), [])[0]
     sleeves = {"TQQQ 25% 칸 (익절 포함)": sl["TQQQ"], "QLD 25% 칸": sl["QLD (익절 없음)"],
-               "TQQQ 25% 칸 (익절 없음)": sl["TQQQ (익절 없음)"]}
+               "TQQQ 25% 칸 (익절 없음)": sl["TQQQ (익절 없음)"],
+               "QLD 25% 칸 (장기보유)": sleeves["QLD (익절 없음)"]}
 
     def stats(e):
         daily = e.pct_change().dropna()
@@ -193,18 +195,19 @@ def main():
                         for k, v in ys.items()}).to_string())
 
     print("\n[연도별 수익률 / 연중 MDD]  (첫해·마지막해는 부분 기간)")
-    yt, yq = yearly(ports["TQQQ 전략"]), yearly(ports["QLD 전략"])
+    yt, yq, yh = yearly(ports["TQQQ 전략"]), yearly(ports["QLD 전략"]), yearly(ref["QLD 장기보유"])
     tbl = pd.DataFrame({
         "TQQQ 수익률": {y: f"{v[0]:.1%}" for y, v in yt.items()},
         "TQQQ MDD": {y: f"{v[1]:.1%}" for y, v in yt.items()},
         "QLD 수익률": {y: f"{v[0]:.1%}" for y, v in yq.items()},
         "QLD MDD": {y: f"{v[1]:.1%}" for y, v in yq.items()},
-        "수익률 차(TQQQ-QLD)": {y: f"{yt[y][0] - yq[y][0]:+.1%}" for y in yt},
+        "QLD 장기보유 수익률": {y: f"{v[0]:.1%}" for y, v in yh.items()},
+        "QLD 장기보유 MDD": {y: f"{v[1]:.1%}" for y, v in yh.items()},
     })
     print(tbl.to_string())
 
     print("\n[2018-01-01 이후 재계산 (2017 비트코인 폭등 제외)]")
-    print(pd.DataFrame({k: stats(v.loc["2018-01-01":]) for k, v in ports.items()}).T.to_string())
+    print(pd.DataFrame({k: stats(v.loc["2018-01-01":]) for k, v in {**ports, "QLD 장기보유": ref["QLD 장기보유"]}.items()}).T.to_string())
 
     print("\n[TQQQ 전략 매매 내역]")
     for d, k in tqqq_log:

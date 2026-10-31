@@ -148,7 +148,8 @@ def main():
     tqqq_sig = ma_signal(adj["TQQQ"].loc[stock_days])
     ixic_sig = ma_signal(adj["^IXIC"].loc[stock_days])
     specs = {"TQQQ 전략": ("TQQQ", tqqq_sig, LADDER), "QLD 전략": ("QLD", ixic_sig, []),
-             "TQQQ 익절 없음": ("TQQQ", tqqq_sig, [])}
+             "TQQQ 익절 없음": ("TQQQ", tqqq_sig, []),
+             "QLD 장기보유": ("QLD", pd.Series(1, index=stock_days), [])}
 
     years = (sim_days[-1] - sim_days[0]).days / 365.25
 
