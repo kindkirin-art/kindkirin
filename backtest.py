@@ -1,5 +1,5 @@
 """
-비트코인·금 포트폴리오 백테스트 (최근 10년)
+비트코인·금 포트폴리오 백테스트 (2018-01-01 ~ )
 
 공통 비트코인 신호: BTC 120일선, 대기 없음
   종가 > 120일선 → 당일 종가 매수 / 종가 < 120일선 → 당일 종가 매도
@@ -11,7 +11,7 @@
 
 2) 스위치 포트폴리오
   - 매수신호 시 전 재산을 비트코인으로 매수
-  - 매수가 대비 수익률이 25% / 50% / 100% / 200%에 도달한 날 종가에
+  - 매수가 대비 수익률이 10% / 25% / 50% / 100%에 도달한 날 종가에
     그 시점 비트코인 잔량의 25% / 25% / 50% / 50%를 금으로 전환
   - 매도신호 시 비트코인과 금을 모두 매도하고 SGOV로 대기
   - 참고용 변형: 매도신호 때 비트코인만 팔고 금은 계속 보유
@@ -25,9 +25,9 @@ import pandas as pd
 import yfinance as yf
 
 END = pd.Timestamp(sys.argv[1]) if len(sys.argv) > 1 else pd.Timestamp.today().normalize()
-START = END - pd.DateOffset(years=10)
+START = pd.Timestamp(sys.argv[2]) if len(sys.argv) > 2 else pd.Timestamp("2018-01-01")
 WARMUP = START - pd.DateOffset(years=1)
-LEVELS = [(0.25, 0.25), (0.50, 0.25), (1.00, 0.50), (2.00, 0.50)]  # (수익률, 금 전환 비율)
+LEVELS = [(0.10, 0.25), (0.25, 0.25), (0.50, 0.50), (1.00, 0.50)]  # (수익률, 금 전환 비율)
 
 
 def load():
