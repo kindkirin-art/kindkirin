@@ -9,7 +9,7 @@ TQQQ 전략 vs QLD 전략 세후 백테스트 (한국 거주자 기준)
   - 비트코인(현물 직접 보유): 가상자산 과세 2027년 시행 예정이므로 비과세
   - 양도세는 다음 해 5월 말에 SGOV(15% 칸)에서 납부
   - 환율 변동, 금융소득종합과세, 거래비용은 미반영
-"TQQQ 30% 전략"은 TQQQ 30 / 금 30 / 비트코인 30 / SGOV 10 비중.
+"TQQQ/QLD 30%" 변형은 레버리지 30 / 금 30 / 비트코인 30 / SGOV 10 비중.
 결과는 '청산 안 함'(마지막 해 미납 세금만 차감)과 '기말 전량 청산'(미실현 이익까지 과세) 두 가지.
 """
 import sys
@@ -24,7 +24,7 @@ END = pd.Timestamp(sys.argv[1]) if len(sys.argv) > 1 else pd.Timestamp.today().n
 START = pd.Timestamp(sys.argv[2]) if len(sys.argv) > 2 else END - pd.DateOffset(years=10)
 WARMUP = START - pd.DateOffset(years=2)
 CGT, DIV_TAX = 0.22, 0.154
-W_TQQQ30 = {"LEV": 0.30, "GLD": 0.30, "BTC": 0.30, "CASH": 0.10}  # TQQQ 30% / SGOV 10% 변형
+W_TQQQ30 = {"LEV": 0.30, "GLD": 0.30, "BTC": 0.30, "CASH": 0.10}  # 레버리지 30% / SGOV 10% 변형
 
 
 def load():
@@ -152,7 +152,9 @@ def main():
     specs = {"TQQQ 전략": ("TQQQ", tqqq_sig, LADDER), "QLD 전략": ("QLD", ixic_sig, []),
              "TQQQ 익절 없음": ("TQQQ", tqqq_sig, []),
              "QLD 장기보유": ("QLD", pd.Series(1, index=stock_days), []),
-             "TQQQ 30% 전략": ("TQQQ", tqqq_sig, LADDER, W_TQQQ30)}
+             "TQQQ 30% 전략": ("TQQQ", tqqq_sig, LADDER, W_TQQQ30),
+             "QLD 30% 전략": ("QLD", ixic_sig, [], W_TQQQ30),
+             "QLD 30% 장기보유": ("QLD", pd.Series(1, index=stock_days), [], W_TQQQ30)}
 
     years = (sim_days[-1] - sim_days[0]).days / 365.25
 
