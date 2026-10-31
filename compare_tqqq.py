@@ -9,7 +9,8 @@
   - TQQQ 200일선     : QQQ 종가 > 200일선이면 보유, 아래면 당일 매도 (대기 없음)
   - TQQQ 200일선+5%  : QQQ 종가 > 200일선×1.05 매수, 종가 < 200일선 매도 (엔벨로프)
   - TQQQ 장기보유
-미보유 시 SGOV(상장 전 BIL). 거래비용/세금/슬리피지 미반영.
+미보유 시 SGOV(상장 전 BIL). "+SCHD" 표시는 미보유 시 SCHD로 스위칭.
+거래비용/세금/슬리피지 미반영.
 """
 import sys
 
@@ -40,7 +41,7 @@ def envelope_signal(px, n=200, band=0.05):
 
 
 def main():
-    tickers = ["QLD", "TQQQ", "QQQ", "^IXIC", "GLD", "BTC-USD", "SGOV", "BIL"]
+    tickers = ["QLD", "TQQQ", "QQQ", "SCHD", "^IXIC", "GLD", "BTC-USD", "SGOV", "BIL"]
     px = yf.download(tickers, start=WARMUP, end=END + pd.Timedelta(days=1),
                      auto_adjust=True, progress=False)["Close"]
     px.index = pd.to_datetime(px.index).tz_localize(None)
@@ -51,7 +52,7 @@ def main():
 
     r_cash = bt.cash_returns(px, stock_days).reindex(cal).fillna(0.0)
     ret = {t: px[t].reindex(cal).ffill().pct_change().fillna(0.0)
-           for t in ["QLD", "TQQQ", "GLD", "BTC-USD"]}
+           for t in ["QLD", "TQQQ", "SCHD", "GLD", "BTC-USD"]}
 
     def held(sig):
         return sig.reindex(cal).ffill().fillna(0).shift(1).fillna(0)
@@ -66,9 +67,12 @@ def main():
 
     sleeves = {
         "QLD 추세추종": (ret["QLD"], sig_ixic),
+        "QLD 추세추종+SCHD": (ret["QLD"], sig_ixic, ret["SCHD"]),
         "QLD 장기보유": (ret["QLD"], None),
         "TQQQ 추세추종(동일신호)": (ret["TQQQ"], sig_ixic),
+        "TQQQ 추세추종+SCHD": (ret["TQQQ"], sig_ixic, ret["SCHD"]),
         "TQQQ 200일선(QQQ)": (ret["TQQQ"], sig_qqq),
+        "TQQQ 200일선+SCHD": (ret["TQQQ"], sig_qqq, ret["SCHD"]),
         "TQQQ 200일선+5%": (ret["TQQQ"], sig_env),
         "TQQQ 장기보유": (ret["TQQQ"], None),
     }
@@ -95,8 +99,9 @@ def main():
         return (1 + r.loc[sim_days].iloc[1:]).cumprod()
 
     port, alone, info = {}, {}, {}
-    for name, (r, sig) in sleeves.items():
-        r_s = r if sig is None else pd.Series(np.where(held(sig) == 1, r, r_cash), index=cal)
+    for name, (r, sig, *off) in sleeves.items():
+        r_off = off[0] if off else r_cash
+        r_s = r if sig is None else pd.Series(np.where(held(sig) == 1, r, r_off), index=cal)
         sr = pd.DataFrame({"QLD": r_s, "GLD": ret["GLD"], "BTC": r_btc, "CASH": r_cash}, index=cal)
         port[name] = simulate(sr)
         alone[name] = sleeve_only(r_s)
