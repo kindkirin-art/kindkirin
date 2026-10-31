@@ -20,7 +20,7 @@ import yfinance as yf
 from backtest import LADDER, WEIGHTS, ma_signal
 
 END = pd.Timestamp(sys.argv[1]) if len(sys.argv) > 1 else pd.Timestamp.today().normalize()
-START = END - pd.DateOffset(years=10)
+START = pd.Timestamp(sys.argv[2]) if len(sys.argv) > 2 else END - pd.DateOffset(years=10)
 WARMUP = START - pd.DateOffset(years=2)
 CGT, DIV_TAX = 0.22, 0.154
 

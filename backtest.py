@@ -29,7 +29,7 @@ import pandas as pd
 import yfinance as yf
 
 END = pd.Timestamp(sys.argv[1]) if len(sys.argv) > 1 else pd.Timestamp.today().normalize()
-START = END - pd.DateOffset(years=10)
+START = pd.Timestamp(sys.argv[2]) if len(sys.argv) > 2 else END - pd.DateOffset(years=10)
 WARMUP = START - pd.DateOffset(years=2)
 WEIGHTS = {"LEV": 0.25, "GLD": 0.30, "BTC": 0.30, "CASH": 0.15}
 LADDER = [(0.20, 0.25), (0.50, 0.25), (1.00, 0.50), (2.00, 0.50)]  # (수익률, 잔량 중 전환 비율)
