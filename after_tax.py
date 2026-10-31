@@ -27,6 +27,7 @@ CGT, DIV_TAX = 0.22, 0.154
 W_TQQQ30 = {"LEV": 0.30, "GLD": 0.30, "BTC": 0.30, "CASH": 0.10}  # 레버리지 30% / SGOV 10% 변형
 W_AGGR = {"LEV": 0.50, "GLD": 0.15, "BTC": 0.25, "CASH": 0.10}  # 공격형 TQQQ 50 / 금 15 / BTC 25 / SGOV 10
 W_40 = {"LEV": 0.40, "GLD": 0.20, "BTC": 0.30, "CASH": 0.10}  # TQQQ 40 / 금 20 / BTC 30 / SGOV 10
+W_40G = {"LEV": 0.40, "GLD": 0.30, "BTC": 0.20, "CASH": 0.10}  # TQQQ 40 / 금 30 / BTC 20 / SGOV 10
 
 
 def load():
@@ -158,7 +159,8 @@ def main():
              "QLD 30% 전략": ("QLD", ixic_sig, [], W_TQQQ30),
              "QLD 30% 장기보유": ("QLD", pd.Series(1, index=stock_days), [], W_TQQQ30),
              "TQQQ 공격형 50/15/25/10": ("TQQQ", tqqq_sig, LADDER, W_AGGR),
-             "TQQQ 40/20/30/10": ("TQQQ", tqqq_sig, LADDER, W_40)}
+             "TQQQ 40/20/30/10": ("TQQQ", tqqq_sig, LADDER, W_40),
+             "TQQQ 40/30/20/10": ("TQQQ", tqqq_sig, LADDER, W_40G)}
 
     years = (sim_days[-1] - sim_days[0]).days / 365.25
 
