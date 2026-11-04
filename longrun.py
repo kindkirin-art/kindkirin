@@ -5,6 +5,7 @@
   - TQQQ 전략 30%: TQQQ 200일선 3일/2일 + SCHD 익절(+20/50/100/200% → 잔량 25/25/50/50%)
   - QLD 추세추종 30%: ^IXIC 200일선 3일/2일
   - QLD 장기보유 30%
+  - 비중 변형: TQQQ 40/20/30/10, TQQQ→GLD 50/30/20 (TQQQ 매도 시 GLD 대기, 금 장기보유 없음, BTC 30 / SGOV 20)
 
 상장 전 구간은 대체 데이터로 이어 붙임 (상장 후는 실제 수정종가):
   - TQQQ(2010-02 전), QLD(2006-06 전): 나스닥100(^NDX) 일간수익률 × 3(2) − 차입비용(T-bill × 2(1)) − 보수 0.95%
@@ -114,16 +115,18 @@ def main():
     yr = pd.Series(sim, index=sim)
     rebal = {d for d in yr.groupby(yr.index.year).max() if d.month == 12 and d.day >= 24}
 
-    def simulate(asset, sig, ladder):
+    def simulate(asset, sig, ladder, w=None, off="SGOV"):
+        w = w or W
+        r_wait = r_gold if off == "GLD" else r_cash  # 매도 시 대기 자산
         sig = sig.reindex(days).fillna(0)
         p = price[asset]
-        a = {"lev": 0.0, "schd": 0.0, "cash": W["LEV"], "GLD": W["GLD"], "BTC": W["BTC"], "CASH": W["CASH"]}
+        a = {"lev": 0.0, "schd": 0.0, "cash": w["LEV"], "GLD": w["GLD"], "BTC": w["BTC"], "CASH": w["CASH"]}
         state, avg, level, eq, n = 0, np.nan, 0, [], {"매수": 0, "매도": 0, "익절": 0}
         for d in sim:
             if d != start_day:
                 a["lev"] *= 1 + lev[asset][d]
                 a["schd"] *= 1 + r_schd[d]
-                a["cash"] *= 1 + r_cash[d]
+                a["cash"] *= 1 + r_wait[d]
                 a["GLD"] *= 1 + r_gold[d]
                 a["BTC"] *= 1 + r_btc[d]
                 a["CASH"] *= 1 + r_cash[d]
@@ -146,13 +149,13 @@ def main():
                     n["익절"] += 1
             total = sum(a.values())
             if d in rebal:
-                k = W["LEV"] * total / (a["lev"] + a["schd"] + a["cash"])
+                k = w["LEV"] * total / (a["lev"] + a["schd"] + a["cash"])
                 if k > 1 and a["lev"] > 0:
                     avg = (avg + (k - 1) * p[d]) / k
                 for x in ("lev", "schd", "cash"):
                     a[x] *= k
                 for x in ("GLD", "BTC", "CASH"):
-                    a[x] = W[x] * total
+                    a[x] = w[x] * total
             eq.append(total)
         return pd.Series(eq, index=sim), n
 
@@ -165,6 +168,9 @@ def main():
         "QLD 추세추종 30%": simulate("QLD", ix_sig, []),
         "QLD 장기보유 30%": simulate("QLD", hold, []),
         "TQQQ 장기보유 30%": simulate("TQQQ", hold, []),
+        "TQQQ 40/20/30/10": simulate("TQQQ", tq_sig, LADDER, {"LEV": 0.40, "GLD": 0.20, "BTC": 0.30, "CASH": 0.10}),
+        "TQQQ→GLD 50/30/20": simulate("TQQQ", tq_sig, LADDER, {"LEV": 0.50, "GLD": 0.0, "BTC": 0.30, "CASH": 0.20},
+                                      off="GLD"),
     }
     ndx = px["^NDX"].loc[sim]
     curves = {k: v[0] for k, v in runs.items()}

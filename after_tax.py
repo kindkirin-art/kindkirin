@@ -9,6 +9,7 @@ TQQQ 전략 vs QLD 전략 세후 백테스트 (한국 거주자 기준)
   - 비트코인(현물 직접 보유): 가상자산 과세 2027년 시행 예정이므로 비과세
   - 양도세는 다음 해 5월 말에 SGOV(15% 칸)에서 납부
   - 환율 변동, 금융소득종합과세, 거래비용은 미반영
+"TQQQ→GLD 50/30/20"은 TQQQ 칸 매도 시 SGOV 대신 GLD로 대기하고 금 장기보유는 없는 변형 (TQQQ 50 / BTC 30 / SGOV 20).
 "TQQQ/QLD 30%" 변형은 레버리지 30 / 금 30 / 비트코인 30 / SGOV 10 비중.
 결과는 '청산 안 함'(마지막 해 미납 세금만 차감)과 '기말 전량 청산'(미실현 이익까지 과세) 두 가지.
 """
@@ -28,6 +29,7 @@ W_TQQQ30 = {"LEV": 0.30, "GLD": 0.30, "BTC": 0.30, "CASH": 0.10}  # 레버리지
 W_AGGR = {"LEV": 0.50, "GLD": 0.15, "BTC": 0.25, "CASH": 0.10}  # 공격형 TQQQ 50 / 금 15 / BTC 25 / SGOV 10
 W_40 = {"LEV": 0.40, "GLD": 0.20, "BTC": 0.30, "CASH": 0.10}  # TQQQ 40 / 금 20 / BTC 30 / SGOV 10
 W_40G = {"LEV": 0.40, "GLD": 0.30, "BTC": 0.20, "CASH": 0.10}  # TQQQ 40 / 금 30 / BTC 20 / SGOV 10
+W_SW = {"LEV": 0.50, "GLD": 0.0, "BTC": 0.30, "CASH": 0.20}  # TQQQ 50(매도 시 GLD) / BTC 30 / SGOV 20
 
 
 def load():
@@ -66,17 +68,19 @@ def main():
     rebal = {d for d in yr.groupby(yr.index.year).max() if d.month == 12 and d.day >= 24}
     pay_day = {d: d.year for d in yr[yr.index.month == 5].groupby(yr[yr.index.month == 5].index.year).max()}
 
-    def simulate(asset, sig, ladder, taxed=True, w=WEIGHTS):
+    def simulate(asset, sig, ladder, taxed=True, w=WEIGHTS, off="SGOV"):
         cgt = CGT if taxed else 0.0
         dtx = DIV_TAX if taxed else 0.0
         rc = r_cash.where(r_cash <= 0, r_cash * (1 - dtx))
         r_btc = pd.Series(np.where(btc_held == 1, r["BTC-USD"], rc), index=cal)
         sig = sig.reindex(cal).ffill().fillna(0)
         p_lev = price[asset]
-        tkr = {"lev": asset, "schd": "SCHD", "GLD": "GLD"}
-        v = {"lev": 0.0, "schd": 0.0, "GLD": w["GLD"],
+        tkr = {"lev": asset, "schd": "SCHD", "GLD": "GLD", "offg": "GLD"}
+        v = {"lev": 0.0, "schd": 0.0, "GLD": w["GLD"], "offg": 0.0,
              "cash": w["LEV"], "BTC": w["BTC"], "CASH": w["CASH"]}
-        b = {"lev": 0.0, "schd": 0.0, "GLD": w["GLD"]}  # 취득가액
+        b = {"lev": 0.0, "schd": 0.0, "GLD": w["GLD"], "offg": 0.0}  # 취득가액
+        if off == "GLD":  # 매도 신호 시 대기 자산을 SGOV 대신 GLD로
+            v["offg"], b["offg"], v["cash"] = w["LEV"], w["LEV"], 0.0
         realized, paid = {}, {}
         state, avg, level = 0, np.nan, 0
         eq = []
@@ -110,8 +114,9 @@ def main():
             if d in stock_set:
                 p = p_lev[d]
                 if state == 0 and sig[d] == 1:
-                    amt = v["cash"] + v["schd"]
+                    amt = v["cash"] + v["schd"] + v["offg"]
                     sell("schd", v["schd"], d)
+                    sell("offg", v["offg"], d)
                     v["cash"] = 0.0
                     buy("lev", amt)
                     state, avg, level = 1, p, 0
@@ -119,7 +124,10 @@ def main():
                     amt = v["lev"] + v["schd"]
                     sell("lev", v["lev"], d)
                     sell("schd", v["schd"], d)
-                    v["cash"] += amt
+                    if off == "GLD":
+                        buy("offg", amt)
+                    else:
+                        v["cash"] += amt
                     state = 0
                 if state == 1:
                     while level < len(ladder) and p / avg - 1 >= ladder[level][0]:
@@ -129,11 +137,11 @@ def main():
                         level += 1
             total = sum(v.values())
             if d in rebal:
-                sleeve = v["lev"] + v["schd"] + v["cash"]
+                sleeve = v["lev"] + v["schd"] + v["cash"] + v["offg"]
                 k = w["LEV"] * total / sleeve
                 if k > 1 and v["lev"] > 0:
                     avg = (avg + (k - 1) * p_lev[d]) / k
-                for x in ("lev", "schd"):
+                for x in ("lev", "schd", "offg"):
                     (sell(x, v[x] * (1 - k), d) if k < 1 else buy(x, v[x] * (k - 1)))
                 v["cash"] *= k
                 g = w["GLD"] * total - v["GLD"]
@@ -160,7 +168,9 @@ def main():
              "QLD 30% 장기보유": ("QLD", pd.Series(1, index=stock_days), [], W_TQQQ30),
              "TQQQ 공격형 50/15/25/10": ("TQQQ", tqqq_sig, LADDER, W_AGGR),
              "TQQQ 40/20/30/10": ("TQQQ", tqqq_sig, LADDER, W_40),
-             "TQQQ 40/30/20/10": ("TQQQ", tqqq_sig, LADDER, W_40G)}
+             "TQQQ 40/30/20/10": ("TQQQ", tqqq_sig, LADDER, W_40G),
+             "TQQQ→GLD 50/30/20": ("TQQQ", tqqq_sig, LADDER, W_SW, "GLD"),
+             "(참고) TQQQ→SGOV 50/30/20": ("TQQQ", tqqq_sig, LADDER, W_SW)}
 
     years = (sim_days[-1] - sim_days[0]).days / 365.25
 
@@ -170,10 +180,11 @@ def main():
         return cagr, dd, final
 
     res, rows, pre_tbl = {}, {}, {}
-    for name, (asset, sig, lad, *w) in specs.items():
-        w = w[0] if w else WEIGHTS
-        pre = simulate(asset, sig, lad, taxed=False, w=w)[0]
-        eq, owed, liq, realized, paid = simulate(asset, sig, lad, w=w)
+    for name, (asset, sig, lad, *opt) in specs.items():
+        w = opt[0] if opt else WEIGHTS
+        off = opt[1] if len(opt) > 1 else "SGOV"
+        pre = simulate(asset, sig, lad, taxed=False, w=w, off=off)[0]
+        eq, owed, liq, realized, paid = simulate(asset, sig, lad, w=w, off=off)
         res[name] = (pre, eq, owed, liq, realized, paid)
         prev = pre.iloc[0]
         for y, g in pre.groupby(pre.index.year):
