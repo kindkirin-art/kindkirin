@@ -26,7 +26,7 @@ def run(band=0.0, fee=0.0, px=btc, ma=sma):
         held.append(pos)
     held = pd.Series(held, index=px.index)
     prev = held.shift().fillna(0)
-    r = ret.loc[px.index] * prev - (held != prev) * fee   # position from yesterday's close
+    r = px.pct_change().fillna(0.0) * prev - (held != prev) * fee   # position from yesterday close
     return (1 + r).cumprod(), trades, held.mean()
 
 
