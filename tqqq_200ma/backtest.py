@@ -21,19 +21,20 @@ import yfinance as yf
 
 END = "2026-11-07"
 START = "2016-11-07"          # last 10 years
-FEE = float(sys.argv[1]) if len(sys.argv) > 1 else 0.0   # e.g. 0.001 = 0.1%
 LEVELS = [(0.20, 0.25), (0.50, 0.25), (1.00, 0.50), (2.00, 0.50)]
 
-px = yf.download(["TQQQ", "SQQQ", "SCHD", "QQQ", "TAIL"], start="2015-01-01", end=END,
-                 auto_adjust=True, progress=False)["Close"]
-px = px.dropna(subset=["TQQQ", "SQQQ", "SCHD", "QQQ"])   # TAIL starts 2017-04
-px["MA200"] = px["TQQQ"].rolling(200).mean()
-px = px.loc[START:]
+
+def load():
+    px = yf.download(["TQQQ", "SQQQ", "SCHD", "QQQ", "TAIL"], start="2015-01-01", end=END,
+                     auto_adjust=True, progress=False)["Close"]
+    px = px.dropna(subset=["TQQQ", "SQQQ", "SCHD", "QQQ"])   # TAIL starts 2017-04
+    px["MA200"] = px["TQQQ"].rolling(200).mean()
+    return px.loc[START:]
 
 
-def run(hedge=None):
+def run(px, hedge=None, FEE=0.0):
     """hedge: None, "SQQQ" or "TAIL" (10% of entry for 3 days; cash if no data)."""
-    cash, sh = 1.0, {"TQQQ": 0.0, "SQQQ": 0.0, "TAIL": 0.0, "SCHD": 0.0}
+    cash, sh = 1.0, {t: 0.0 for t in ("TQQQ", "SQQQ", "TAIL", "SCHD") if t in px}
     invested, up, dn = False, 0, 0
     entry, hit, hedge_day = None, set(), None
     eq, log = [], []
@@ -68,7 +69,7 @@ def run(hedge=None):
                         f"{r.TQQQ / entry - 1:+.1%}"))
         elif invested:
             if hedge_day is not None and i >= hedge_day:
-                v = sh[hedge] * r[hedge] if sh[hedge] else 0.0
+                v = sh[hedge] * r[hedge] if sh.get(hedge) else 0.0
                 if v:
                     trade(hedge, -v, r[hedge]); sh[hedge] = 0.0
                 else:                     # no hedge data -> idle 10% cash
@@ -96,22 +97,25 @@ def stats(s):
             "Calmar": ((s.iloc[-1] / s.iloc[0]) ** (1 / yrs) - 1) / -dd.min()}
 
 
-A, logA = run()
-B, logB = run("SQQQ")
-C, logC = run("TAIL")
-curves = pd.DataFrame({"A_base": A, "B_sqqq_hedge": B, "C_tail_hedge": C,
-                       "TQQQ_BH": px.TQQQ / px.TQQQ.iloc[0], "QQQ_BH": px.QQQ / px.QQQ.iloc[0]})
-curves.to_csv(__file__.replace("backtest.py", "equity_curves.csv"), float_format="%.6f")
+if __name__ == "__main__":
+    FEE = float(sys.argv[1]) if len(sys.argv) > 1 else 0.0   # e.g. 0.001 = 0.1%
+    px = load()
+    A, logA = run(px, None, FEE)
+    B, logB = run(px, "SQQQ", FEE)
+    C, logC = run(px, "TAIL", FEE)
+    curves = pd.DataFrame({"A_base": A, "B_sqqq_hedge": B, "C_tail_hedge": C,
+                           "TQQQ_BH": px.TQQQ / px.TQQQ.iloc[0], "QQQ_BH": px.QQQ / px.QQQ.iloc[0]})
+    curves.to_csv(__file__.replace("backtest.py", "equity_curves.csv"), float_format="%.6f")
 
-print(f"Period {px.index[0].date()} ~ {px.index[-1].date()}  fee={FEE}")
-tbl = pd.DataFrame({c: stats(curves[c]) for c in curves}).T
-print(tbl.to_string(formatters={"Final x": "{:.2f}".format, "CAGR": "{:.1%}".format,
-                                "MDD": "{:.1%}".format, "Sharpe": "{:.2f}".format,
-                                "Calmar": "{:.2f}".format}))
-yr = curves.resample("YE").last()
-yr = pd.concat([curves.iloc[:1], yr]).pct_change().dropna()
-yr.index = yr.index.year
-print("\nYearly returns\n", (yr * 100).round(1).to_string())
-print(f"\nTrades: {sum(1 for x in logA if x[1]=='BUY')} entries")
-for x in logA:
-    print(*x)
+    print(f"Period {px.index[0].date()} ~ {px.index[-1].date()}  fee={FEE}")
+    tbl = pd.DataFrame({c: stats(curves[c]) for c in curves}).T
+    print(tbl.to_string(formatters={"Final x": "{:.2f}".format, "CAGR": "{:.1%}".format,
+                                    "MDD": "{:.1%}".format, "Sharpe": "{:.2f}".format,
+                                    "Calmar": "{:.2f}".format}))
+    yr = curves.resample("YE").last()
+    yr = pd.concat([curves.iloc[:1], yr]).pct_change().dropna()
+    yr.index = yr.index.year
+    print("\nYearly returns\n", (yr * 100).round(1).to_string())
+    print(f"\nTrades: {sum(1 for x in logA if x[1]=='BUY')} entries")
+    for x in logA:
+        print(*x)
