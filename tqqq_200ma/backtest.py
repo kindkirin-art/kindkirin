@@ -33,7 +33,7 @@ def load():
     return px.loc[START:]
 
 
-def run(px, hedge=None, FEE=0.0, hold=3):
+def run(px, hedge=None, FEE=0.0, hold=3, buy_n=3, sell_n=2, band=0.0):
     """hedge: None, "SQQQ" or "TAIL" (10% of entry for `hold` days; cash if no data)."""
     cash, sh = 1.0, {t: 0.0 for t in ("TQQQ", "SQQQ", "TAIL", "SCHD") if t in px}
     invested, up, dn = False, 0, 0
@@ -46,10 +46,10 @@ def run(px, hedge=None, FEE=0.0, hold=3):
         cash -= amount + abs(amount) * FEE
 
     for i, (d, r) in enumerate(px.iterrows()):
-        above = r.TQQQ > r.MA200
-        up, dn = (up + 1, 0) if above else (0, dn + 1)
+        up = up + 1 if r.TQQQ > r.MA200 * (1 + band) else 0
+        dn = dn + 1 if r.TQQQ < r.MA200 * (1 - band) else 0
 
-        if not invested and up >= 3:
+        if not invested and up >= buy_n:
             budget = cash / (1 + FEE)
             if hedge:
                 trade("TQQQ", budget * 0.9, r.TQQQ)
@@ -60,7 +60,7 @@ def run(px, hedge=None, FEE=0.0, hold=3):
                 trade("TQQQ", budget, r.TQQQ)
             invested, entry, hit = True, r.TQQQ, set()
             log.append((d.date(), "BUY", round(r.TQQQ, 2)))
-        elif invested and dn >= 2:
+        elif invested and dn >= sell_n:
             for t in sh:
                 if sh[t]:
                     trade(t, -sh[t] * r[t], r[t])
