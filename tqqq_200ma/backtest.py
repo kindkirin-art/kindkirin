@@ -24,14 +24,16 @@ START = "2016-11-07"          # last 10 years
 FEE = float(sys.argv[1]) if len(sys.argv) > 1 else 0.0   # e.g. 0.001 = 0.1%
 LEVELS = [(0.20, 0.25), (0.50, 0.25), (1.00, 0.50), (2.00, 0.50)]
 
-px = yf.download(["TQQQ", "SQQQ", "SCHD", "QQQ"], start="2015-01-01", end=END,
-                 auto_adjust=True, progress=False)["Close"].dropna()
+px = yf.download(["TQQQ", "SQQQ", "SCHD", "QQQ", "TAIL"], start="2015-01-01", end=END,
+                 auto_adjust=True, progress=False)["Close"]
+px = px.dropna(subset=["TQQQ", "SQQQ", "SCHD", "QQQ"])   # TAIL starts 2017-04
 px["MA200"] = px["TQQQ"].rolling(200).mean()
 px = px.loc[START:]
 
 
-def run(hedge: bool):
-    cash, sh = 1.0, {"TQQQ": 0.0, "SQQQ": 0.0, "SCHD": 0.0}
+def run(hedge=None):
+    """hedge: None, "SQQQ" or "TAIL" (10% of entry for 3 days; cash if no data)."""
+    cash, sh = 1.0, {"TQQQ": 0.0, "SQQQ": 0.0, "TAIL": 0.0, "SCHD": 0.0}
     invested, up, dn = False, 0, 0
     entry, hit, hedge_day = None, set(), None
     eq, log = [], []
@@ -49,7 +51,8 @@ def run(hedge: bool):
             budget = cash / (1 + FEE)
             if hedge:
                 trade("TQQQ", budget * 0.9, r.TQQQ)
-                trade("SQQQ", budget * 0.1, r.SQQQ)
+                if pd.notna(r[hedge]):
+                    trade(hedge, budget * 0.1, r[hedge])
                 hedge_day = i + 3
             else:
                 trade("TQQQ", budget, r.TQQQ)
@@ -64,9 +67,12 @@ def run(hedge: bool):
             log.append((d.date(), "SELL", round(r.TQQQ, 2),
                         f"{r.TQQQ / entry - 1:+.1%}"))
         elif invested:
-            if hedge_day is not None and i >= hedge_day and sh["SQQQ"]:
-                v = sh["SQQQ"] * r.SQQQ
-                trade("SQQQ", -v, r.SQQQ); sh["SQQQ"] = 0.0
+            if hedge_day is not None and i >= hedge_day:
+                v = sh[hedge] * r[hedge] if sh[hedge] else 0.0
+                if v:
+                    trade(hedge, -v, r[hedge]); sh[hedge] = 0.0
+                else:                     # no hedge data -> idle 10% cash
+                    v = cash / (1 + FEE)
                 trade("TQQQ", v * (1 - FEE) / (1 + FEE), r.TQQQ)
                 hedge_day = None
             ret = r.TQQQ / entry - 1
@@ -77,7 +83,7 @@ def run(hedge: bool):
                     trade("TQQQ", -v, r.TQQQ)
                     trade("SCHD", v * (1 - FEE) / (1 + FEE), r.SCHD)
                     log.append((d.date(), f"TP+{lvl:.0%}", f"{frac:.0%}->SCHD"))
-        eq.append(cash + sum(sh[t] * r[t] for t in sh))
+        eq.append(cash + sum(sh[t] * r[t] for t in sh if sh[t]))
     return pd.Series(eq, index=px.index), log
 
 
@@ -90,9 +96,10 @@ def stats(s):
             "Calmar": ((s.iloc[-1] / s.iloc[0]) ** (1 / yrs) - 1) / -dd.min()}
 
 
-A, logA = run(False)
-B, logB = run(True)
-curves = pd.DataFrame({"A_base": A, "B_sqqq_hedge": B,
+A, logA = run()
+B, logB = run("SQQQ")
+C, logC = run("TAIL")
+curves = pd.DataFrame({"A_base": A, "B_sqqq_hedge": B, "C_tail_hedge": C,
                        "TQQQ_BH": px.TQQQ / px.TQQQ.iloc[0], "QQQ_BH": px.QQQ / px.QQQ.iloc[0]})
 curves.to_csv(__file__.replace("backtest.py", "equity_curves.csv"), float_format="%.6f")
 
