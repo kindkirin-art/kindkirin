@@ -13,6 +13,7 @@ Rules
 - Add-on (variant B): on entry buy 90% TQQQ + 10% SQQQ. 3 trading days later
   sell the SQQQ and put the proceeds into TQQQ. If a sell signal comes first,
   SQQQ is sold together with everything else.
+- Variant C: same with TAIL instead of SQQQ, held 2 trading days (3-day run kept as reference).
 - Cash earns 0%. Fills at the close. Optional per-trade cost via FEE.
 """
 import sys
@@ -32,8 +33,8 @@ def load():
     return px.loc[START:]
 
 
-def run(px, hedge=None, FEE=0.0):
-    """hedge: None, "SQQQ" or "TAIL" (10% of entry for 3 days; cash if no data)."""
+def run(px, hedge=None, FEE=0.0, hold=3):
+    """hedge: None, "SQQQ" or "TAIL" (10% of entry for `hold` days; cash if no data)."""
     cash, sh = 1.0, {t: 0.0 for t in ("TQQQ", "SQQQ", "TAIL", "SCHD") if t in px}
     invested, up, dn = False, 0, 0
     entry, hit, hedge_day = None, set(), None
@@ -54,7 +55,7 @@ def run(px, hedge=None, FEE=0.0):
                 trade("TQQQ", budget * 0.9, r.TQQQ)
                 if pd.notna(r[hedge]):
                     trade(hedge, budget * 0.1, r[hedge])
-                hedge_day = i + 3
+                hedge_day = i + hold
             else:
                 trade("TQQQ", budget, r.TQQQ)
             invested, entry, hit = True, r.TQQQ, set()
@@ -102,8 +103,9 @@ if __name__ == "__main__":
     px = load()
     A, logA = run(px, None, FEE)
     B, logB = run(px, "SQQQ", FEE)
-    C, logC = run(px, "TAIL", FEE)
-    curves = pd.DataFrame({"A_base": A, "B_sqqq_hedge": B, "C_tail_hedge": C,
+    C, logC = run(px, "TAIL", FEE, hold=2)
+    C3, _ = run(px, "TAIL", FEE, hold=3)
+    curves = pd.DataFrame({"A_base": A, "B_sqqq_hedge": B, "C_tail_2d": C, "C_tail_3d_ref": C3,
                            "TQQQ_BH": px.TQQQ / px.TQQQ.iloc[0], "QQQ_BH": px.QQQ / px.QQQ.iloc[0]})
     curves.to_csv(__file__.replace("backtest.py", "equity_curves.csv"), float_format="%.6f")
 

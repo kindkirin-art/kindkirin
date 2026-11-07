@@ -74,8 +74,9 @@ if __name__ == "__main__":
 
     A, logA = run(px, None, FEE)
     B, logB = run(px, "SQQQ", FEE)
-    C, logC = run(px, "TAIL", FEE)
-    curves = pd.DataFrame({"A_base": A, "B_sqqq_hedge": B, "C_tail_hedge": C,
+    C, logC = run(px, "TAIL", FEE, hold=2)
+    C3, _ = run(px, "TAIL", FEE, hold=3)
+    curves = pd.DataFrame({"A_base": A, "B_sqqq_hedge": B, "C_tail_2d": C, "C_tail_3d_ref": C3,
                            "TQQQ_BH": px.TQQQ / px.TQQQ.iloc[0],
                            "QQQ_BH": px.QQQ / px.QQQ.iloc[0]})
     curves.to_csv(__file__.replace("backtest_long.py", "equity_curves_long.csv"),
@@ -94,11 +95,11 @@ if __name__ == "__main__":
     yr.index = yr.index.year
     print("\nYearly returns\n", (yr * 100).round(1).to_string())
     buys = [x[0] for x in logA if x[1] == "BUY"]
-    print(f"\nEntries: {len(buys)}; hedge effect over 3 days vs A  (SQQQ, TAIL):")
+    print(f"\nEntries: {len(buys)}; hedge effect vs A  (SQQQ 3d, TAIL 2d):")
     for d in buys:
         i = px.index.get_loc(pd.Timestamp(d))
         if i + 3 < len(px):
-            e = [(x / A).iloc[i + 3] / (x / A).iloc[i] - 1 for x in (B, C)]
+            e = [(x / A).iloc[i + k] / (x / A).iloc[i] - 1 for x, k in ((B, 3), (C, 2))]
             print(" ", d, f"{e[0] * 100:+.2f}%  {e[1] * 100:+.2f}%")
     print()
     for x in logA:
