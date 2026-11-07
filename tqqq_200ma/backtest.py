@@ -33,7 +33,8 @@ def load():
     return px.loc[START:]
 
 
-def run(px, hedge=None, FEE=0.0, hold=3, buy_n=3, sell_n=2, band=0.0):
+def run(px, hedge=None, FEE=0.0, hold=3, buy_n=3, sell_n=2, band=0.0, atr_k=0.0):
+    """band: fixed % around the MA. atr_k: band = atr_k * px["ATR"] (price units)."""
     """hedge: None, "SQQQ" or "TAIL" (10% of entry for `hold` days; cash if no data)."""
     cash, sh = 1.0, {t: 0.0 for t in ("TQQQ", "SQQQ", "TAIL", "SCHD") if t in px}
     invested, up, dn = False, 0, 0
@@ -46,8 +47,9 @@ def run(px, hedge=None, FEE=0.0, hold=3, buy_n=3, sell_n=2, band=0.0):
         cash -= amount + abs(amount) * FEE
 
     for i, (d, r) in enumerate(px.iterrows()):
-        up = up + 1 if r.TQQQ > r.MA200 * (1 + band) else 0
-        dn = dn + 1 if r.TQQQ < r.MA200 * (1 - band) else 0
+        w = r.MA200 * band + (atr_k * r.ATR if atr_k else 0.0)
+        up = up + 1 if r.TQQQ > r.MA200 + w else 0
+        dn = dn + 1 if r.TQQQ < r.MA200 - w else 0
 
         if not invested and up >= buy_n:
             budget = cash / (1 + FEE)
