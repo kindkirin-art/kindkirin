@@ -1,6 +1,6 @@
 """Long portfolio backtest from the dot-com bubble (1999-01 ~ 2026-11).
 
-Same sleeves/rules as backtest.py (TQQQ switching 1% band, BTC 120MA 1% band, gold, SGOV,
+Same sleeves/rules as portfolio_10y.py (TQQQ switching 1% band, BTC 120MA 1% band, gold, SGOV,
 year-end rebalancing, 0.1% trading cost inside sleeves, idle cash earns T-bills).
 Before 2018 the BTC weight is given to the TQQQ switching sleeve:
   P1: 1999~2017 TQQQ 60 / Gold 30 / SGOV 10  -> 2018~ TQQQ 40 / Gold 30 / BTC 20 / SGOV 10
