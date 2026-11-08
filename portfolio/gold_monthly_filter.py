@@ -14,7 +14,12 @@ gold = (1 + pb.gold_r).cumprod()
 stock = pb.stock
 
 
-def monthly_filter(n, band=0.0):
+def gold_held(n, band=0.0):
+    """1 = gold above its N-month SMA (hold gold), decided at month-end, daily on US trading days."""
+    return _signal(n, band)[0]
+
+
+def _signal(n, band):
     me = gold.groupby([gold.index.year, gold.index.month]).tail(1)          # month-end closes
     pre = pd.read_csv(os.path.join(HERE, "gold_monthly_1998_2000.csv"))
     pre.index = pd.to_datetime(pre["Date"]) + pd.offsets.MonthEnd(0)
@@ -23,7 +28,11 @@ def monthly_filter(n, band=0.0):
     sma = m.rolling(n).mean()
     sig = (m > sma * (1 + band)).astype(int).loc[me.index]                  # decided at month end
     held = sig.reindex(stock).ffill().fillna(1)                             # held after that close
-    prev = held.shift().fillna(1)
+    return held, held.shift().fillna(1)
+
+
+def monthly_filter(n, band=0.0):
+    held, prev = _signal(n, band)
     r = pb.gold_r * prev + (1 - prev) * pb.cash_r - (held != prev) * g.FEE
     return (1 + r).cumprod(), int(((held == 1) & (prev == 0)).sum()), held.mean()
 
