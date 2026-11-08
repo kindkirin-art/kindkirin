@@ -6,6 +6,7 @@ Gold above its monthly 10-month SMA (month-end decision) -> P1 weights, else P2 
   1999~2017  : BTC weight goes to TQQQ_SW -> ON 60/30/0/10, OFF 80/0/0/20
 Rebalanced at every regime change (month-end close, 0.1% on turnover) and at each year end
 (no cost, as in the other portfolio tests).
+Also the inverse: P2 by default, switch to P1 while gold is BELOW its 10-month SMA.
 """
 import pandas as pd
 import portfolio_long as pb
@@ -58,9 +59,11 @@ if __name__ == "__main__":
     for label, start, switch in [("Long 1999~ (BTC from 2018)", "1999-01-04", pb.SWITCH),
                                  ("10y 2016-11~ (BTC from start, like portfolio_10y.py)", "2016-11-07", "2016-11-07")]:
         sw, n = regime_portfolio(held, start, switch)
+        inv, _ = regime_portfolio(1 - held, start, switch)     # P2 base, gold below SMA -> P1
         curves = pd.DataFrame({
             "P1 (gold B&H)": fixed(ON_PRE, ON_POST, start, switch),
             "P1 gold-off -> 50/30/20": sw,
+            "P2 gold-off -> P1": inv,
             "P2": fixed(OFF_PRE, OFF_POST, start, switch),
         })
         print(f"\n=== {label}: regime switches {n}")
