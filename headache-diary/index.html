@@ -107,6 +107,12 @@
       <label class="check" id="afterSleepWrap">
         <input type="checkbox" id="afterSleep"> 자고 나서 생김
       </label>
+      <label class="check" id="rxMedWrap">
+        <input type="checkbox" id="rxMed"> 처방약 복용
+      </label>
+      <label class="check" id="tylenolWrap">
+        <input type="checkbox" id="tylenol"> 타이레놀 복용
+      </label>
     </div>
   </section>
 
@@ -199,6 +205,12 @@
     $('afterSleep').disabled = !hasHeadache;
     $('afterSleep').checked = hasHeadache && !!e.afterSleep;
     $('afterSleepWrap').classList.toggle('disabled', !hasHeadache);
+    const severe = e.headache === 2;
+    ['rxMed', 'tylenol'].forEach((id) => {
+      $(id).disabled = !severe;
+      $(id).checked = severe && !!e[id];
+      $(id + 'Wrap').classList.toggle('disabled', !severe);
+    });
     $('sleep').value = e.sleep ?? '';
     $('breakfast').value = e.breakfast || '';
     $('lunch').value = e.lunch || '';
@@ -215,6 +227,7 @@
   function save(patch) {
     const e = Object.assign({}, entry(), patch);
     if (!(e.headache === 1 || e.headache === 2)) e.afterSleep = false;
+    if (e.headache !== 2) { e.rxMed = false; e.tylenol = false; }
     db[cur] = e;
     const ok = persist();
     $('status').textContent = ok ? '✓ 자동 저장됨' : '⚠ 저장 실패 (브라우저 저장소 확인)';
@@ -233,6 +246,8 @@
       const li = document.createElement('li');
       const parts = [];
       if (e.headache != null) parts.push('두통 ' + e.headache + (e.afterSleep ? '(기상후)' : ''));
+      if (e.rxMed) parts.push('처방약');
+      if (e.tylenol) parts.push('타이레놀');
       if (e.sleep !== '' && e.sleep != null) parts.push('수면 ' + e.sleep + 'h');
       if (e.stress) parts.push('스트레스 ' + e.stress);
       if (e.exercise) parts.push('운동');
@@ -256,6 +271,8 @@
     save({ stress: entry().stress === v ? null : v });
   });
   $('afterSleep').addEventListener('change', (ev) => save({ afterSleep: ev.target.checked }));
+  $('rxMed').addEventListener('change', (ev) => save({ rxMed: ev.target.checked }));
+  $('tylenol').addEventListener('change', (ev) => save({ tylenol: ev.target.checked }));
   $('exercise').addEventListener('change', (ev) => save({ exercise: ev.target.checked }));
 
   function stepSleep(delta) {
@@ -296,11 +313,11 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
   $('exportCsv').addEventListener('click', () => {
-    const cols = ['날짜', '두통(0~2)', '자고나서생김', '수면시간', '아침', '점심', '저녁', '스트레스(1~10)', '운동'];
+    const cols = ['날짜', '두통(0~2)', '자고나서생김', '처방약복용', '타이레놀복용', '수면시간', '아침', '점심', '저녁', '스트레스(1~10)', '운동'];
     const esc = (v) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
     const rows = Object.keys(db).sort().map((k) => {
       const e = db[k];
-      return [k, e.headache ?? '', e.afterSleep ? 'O' : '', e.sleep ?? '', e.breakfast, e.lunch, e.dinner, e.stress ?? '', e.exercise ? 'O' : ''].map(esc).join(',');
+      return [k, e.headache ?? '', e.afterSleep ? 'O' : '', e.rxMed ? 'O' : '', e.tylenol ? 'O' : '', e.sleep ?? '', e.breakfast, e.lunch, e.dinner, e.stress ?? '', e.exercise ? 'O' : ''].map(esc).join(',');
     });
     download('두통일기_' + ymd(new Date()) + '.csv', '﻿' + [cols.map(esc).join(',')].concat(rows).join('\n'), 'text/csv');
   });
