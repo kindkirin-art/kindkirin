@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#4f6bed">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="두통일기">
+<title>두통일기</title>
+<style>
+  :root {
+    --bg: #f4f5f9; --card: #fff; --text: #1d2130; --muted: #6b7185;
+    --line: #e2e5ee; --accent: #4f6bed; --accent-soft: #e8ecfd;
+    --ok: #2e9e62; --warn: #e6a23c; --bad: #e05656;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12141b; --card: #1c1f2a; --text: #eceef5; --muted: #9aa0b4;
+      --line: #2c3040; --accent: #7a90ff; --accent-soft: #262d4d;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+    font-size: 16px; line-height: 1.4;
+    padding: env(safe-area-inset-top) 0 calc(24px + env(safe-area-inset-bottom));
+  }
+  main { max-width: 520px; margin: 0 auto; padding: 12px 16px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 4px 0 12px; }
+  header h1 { font-size: 20px; margin: 0; }
+  .datebar { display: flex; align-items: center; gap: 8px; background: var(--card); border-radius: 14px; padding: 10px; margin-bottom: 12px; }
+  .datebar button { flex: none; width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--text); font-size: 18px; }
+  .datebar .date { flex: 1; text-align: center; }
+  .datebar .date strong { display: block; font-size: 18px; }
+  .datebar .date input { border: 0; background: transparent; color: var(--muted); font-size: 13px; text-align: center; font-family: inherit; }
+  .today-link { font-size: 13px; color: var(--accent); background: none; border: 0; padding: 4px; }
+  .card { background: var(--card); border-radius: 14px; padding: 14px; margin-bottom: 10px; }
+  .label { font-weight: 600; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+  .label small { font-weight: 400; color: var(--muted); }
+  .seg { display: grid; gap: 6px; }
+  .seg.c3 { grid-template-columns: repeat(3, 1fr); }
+  .seg.c10 { grid-template-columns: repeat(5, 1fr); }
+  .seg button {
+    height: 46px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--card); color: var(--text); font-size: 15px; font-family: inherit;
+  }
+  .seg button.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .seg.headache button[data-v="0"].on { background: var(--ok); border-color: var(--ok); }
+  .seg.headache button[data-v="1"].on { background: var(--warn); border-color: var(--warn); }
+  .seg.headache button[data-v="2"].on { background: var(--bad); border-color: var(--bad); }
+  .check { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 16px; }
+  .check input { width: 24px; height: 24px; accent-color: var(--accent); }
+  .check.disabled { opacity: .4; }
+  .sub { margin-top: 10px; padding-top: 6px; border-top: 1px dashed var(--line); }
+  .stepper { display: flex; align-items: center; gap: 10px; }
+  .stepper button { width: 46px; height: 46px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--text); font-size: 22px; }
+  .stepper input { flex: 1; height: 46px; text-align: center; font-size: 20px; font-weight: 600; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--text); font-family: inherit; }
+  input[type=text] {
+    width: 100%; height: 46px; padding: 0 12px; font-size: 16px; font-family: inherit;
+    border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--text);
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .meal + .meal { margin-top: 8px; }
+  .meal span { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  .status { text-align: center; font-size: 13px; color: var(--muted); height: 18px; margin: 4px 0 14px; }
+  h2 { font-size: 16px; margin: 20px 0 8px; }
+  .hist { list-style: none; margin: 0; padding: 0; }
+  .hist li { background: var(--card); border-radius: 12px; padding: 10px 12px; margin-bottom: 6px; display: flex; gap: 10px; align-items: center; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; background: var(--line); }
+  .dot.h0 { background: var(--ok); } .dot.h1 { background: var(--warn); } .dot.h2 { background: var(--bad); }
+  .hist .d { font-weight: 600; min-width: 84px; }
+  .hist .m { color: var(--muted); font-size: 13px; flex: 1; }
+  .tools { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 12px; }
+  .tools button, .tools label {
+    height: 42px; border-radius: 10px; border: 1px solid var(--line); background: var(--card);
+    color: var(--text); font-size: 13px; font-family: inherit; display: flex; align-items: center; justify-content: center;
+  }
+  .empty { color: var(--muted); font-size: 14px; text-align: center; padding: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>🧠 두통일기</h1>
+    <button class="today-link" id="goToday">오늘로</button>
+  </header>
+
+  <div class="datebar">
+    <button id="prev" aria-label="이전 날">‹</button>
+    <div class="date">
+      <strong id="dateLabel"></strong>
+      <input type="date" id="datePick" aria-label="날짜 선택">
+    </div>
+    <button id="next" aria-label="다음 날">›</button>
+  </div>
+
+  <!-- 1. 두통여부 -->
+  <section class="card">
+    <div class="label">1. 두통 여부</div>
+    <div class="seg c3 headache" id="headache">
+      <button data-v="0">0 없음</button>
+      <button data-v="1">1 조금</button>
+      <button data-v="2">2 있음</button>
+    </div>
+    <div class="sub">
+      <label class="check" id="afterSleepWrap">
+        <input type="checkbox" id="afterSleep"> 1.1 자고 나서 생김
+      </label>
+    </div>
+  </section>
+
+  <!-- 2. 수면시간 -->
+  <section class="card">
+    <div class="label">2. 수면 시간 <small>시간</small></div>
+    <div class="stepper">
+      <button id="sleepMinus" aria-label="30분 줄이기">−</button>
+      <input type="number" id="sleep" inputmode="decimal" step="0.5" min="0" max="24" placeholder="-">
+      <button id="sleepPlus" aria-label="30분 늘리기">+</button>
+    </div>
+  </section>
+
+  <!-- 3~5. 식사 -->
+  <section class="card">
+    <div class="label">3~5. 식사</div>
+    <label class="meal"><span>3. 아침</span><input type="text" id="breakfast" placeholder="예) 토스트, 커피"></label>
+    <label class="meal"><span>4. 점심</span><input type="text" id="lunch" placeholder="예) 김치찌개"></label>
+    <label class="meal"><span>5. 저녁</span><input type="text" id="dinner" placeholder="예) 닭가슴살 샐러드"></label>
+  </section>
+
+  <!-- 6. 스트레스 -->
+  <section class="card">
+    <div class="label">6. 스트레스 정도 <small>1 낮음 · 10 높음</small></div>
+    <div class="seg c10" id="stress"></div>
+  </section>
+
+  <!-- 7. 운동 -->
+  <section class="card">
+    <label class="check"><input type="checkbox" id="exercise"> 7. 운동함</label>
+  </section>
+
+  <div class="status" id="status"></div>
+
+  <h2>최근 기록</h2>
+  <ul class="hist" id="hist"></ul>
+
+  <div class="tools">
+    <button id="exportCsv">CSV 내보내기</button>
+    <button id="exportJson">백업 저장</button>
+    <label>백업 불러오기<input type="file" id="importJson" accept=".json,application/json" hidden></label>
+  </div>
+</main>
+
+<script>
+(function () {
+  const KEY = 'headache-diary-v1';
+  const $ = (id) => document.getElementById(id);
+  const DAYS = ['일', '월', '화', '수', '목', '금', '토'];
+
+  function load() {
+    try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; }
+  }
+  function persist() {
+    try { localStorage.setItem(KEY, JSON.stringify(db)); return true; } catch (e) { return false; }
+  }
+  function ymd(d) {
+    const p = (n) => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  }
+  function parse(s) { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); }
+  function label(s) {
+    const d = parse(s);
+    return (d.getMonth() + 1) + '월 ' + d.getDate() + '일 (' + DAYS[d.getDay()] + ')';
+  }
+
+  let db = load();
+  let cur = ymd(new Date());
+
+  // 스트레스 버튼 1~10 생성
+  for (let i = 1; i <= 10; i++) {
+    const b = document.createElement('button');
+    b.dataset.v = i; b.textContent = i;
+    $('stress').appendChild(b);
+  }
+
+  function entry() { return db[cur] || {}; }
+
+  function render() {
+    const e = entry();
+    const today = ymd(new Date());
+    $('dateLabel').textContent = label(cur) + (cur === today ? ' · 오늘' : '');
+    $('datePick').value = cur;
+    $('next').disabled = cur >= today;
+    $('next').style.opacity = cur >= today ? .3 : 1;
+
+    setSeg('headache', e.headache);
+    setSeg('stress', e.stress);
+    const hasHeadache = e.headache === 1 || e.headache === 2;
+    $('afterSleep').disabled = !hasHeadache;
+    $('afterSleep').checked = hasHeadache && !!e.afterSleep;
+    $('afterSleepWrap').classList.toggle('disabled', !hasHeadache);
+    $('sleep').value = e.sleep ?? '';
+    $('breakfast').value = e.breakfast || '';
+    $('lunch').value = e.lunch || '';
+    $('dinner').value = e.dinner || '';
+    $('exercise').checked = !!e.exercise;
+    renderHistory();
+  }
+
+  function setSeg(id, v) {
+    $(id).querySelectorAll('button').forEach((b) => b.classList.toggle('on', Number(b.dataset.v) === v));
+  }
+
+  let statusTimer;
+  function save(patch) {
+    const e = Object.assign({}, entry(), patch);
+    if (!(e.headache === 1 || e.headache === 2)) e.afterSleep = false;
+    db[cur] = e;
+    const ok = persist();
+    $('status').textContent = ok ? '✓ 자동 저장됨' : '⚠ 저장 실패 (브라우저 저장소 확인)';
+    clearTimeout(statusTimer);
+    statusTimer = setTimeout(() => { $('status').textContent = ''; }, 1500);
+    render();
+  }
+
+  function renderHistory() {
+    const keys = Object.keys(db).sort().reverse().slice(0, 30);
+    const ul = $('hist');
+    ul.innerHTML = '';
+    if (!keys.length) { ul.innerHTML = '<li class="empty">아직 기록이 없어요</li>'; return; }
+    keys.forEach((k) => {
+      const e = db[k];
+      const li = document.createElement('li');
+      const parts = [];
+      if (e.headache != null) parts.push('두통 ' + e.headache + (e.afterSleep ? '(기상후)' : ''));
+      if (e.sleep !== '' && e.sleep != null) parts.push('수면 ' + e.sleep + 'h');
+      if (e.stress) parts.push('스트레스 ' + e.stress);
+      if (e.exercise) parts.push('운동');
+      li.innerHTML = '<span class="dot h' + (e.headache ?? '') + '"></span><span class="d"></span><span class="m"></span>';
+      li.querySelector('.d').textContent = label(k);
+      li.querySelector('.m').textContent = parts.join(' · ') || '-';
+      li.addEventListener('click', () => { cur = k; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+      ul.appendChild(li);
+    });
+  }
+
+  // 이벤트
+  $('headache').addEventListener('click', (ev) => {
+    const b = ev.target.closest('button'); if (!b) return;
+    const v = Number(b.dataset.v);
+    save({ headache: entry().headache === v ? null : v });
+  });
+  $('stress').addEventListener('click', (ev) => {
+    const b = ev.target.closest('button'); if (!b) return;
+    const v = Number(b.dataset.v);
+    save({ stress: entry().stress === v ? null : v });
+  });
+  $('afterSleep').addEventListener('change', (ev) => save({ afterSleep: ev.target.checked }));
+  $('exercise').addEventListener('change', (ev) => save({ exercise: ev.target.checked }));
+
+  function stepSleep(delta) {
+    let v = parseFloat($('sleep').value);
+    if (isNaN(v)) v = 7;
+    else v = v + delta;
+    v = Math.min(24, Math.max(0, Math.round(v * 2) / 2));
+    save({ sleep: v });
+  }
+  $('sleepMinus').addEventListener('click', () => stepSleep(-0.5));
+  $('sleepPlus').addEventListener('click', () => stepSleep(0.5));
+  $('sleep').addEventListener('change', (ev) => {
+    const v = parseFloat(ev.target.value);
+    save({ sleep: isNaN(v) ? '' : Math.min(24, Math.max(0, v)) });
+  });
+
+  ['breakfast', 'lunch', 'dinner'].forEach((id) => {
+    $(id).addEventListener('change', (ev) => save({ [id]: ev.target.value.trim() }));
+  });
+
+  function shift(n) {
+    const d = parse(cur); d.setDate(d.getDate() + n);
+    const s = ymd(d);
+    if (s > ymd(new Date())) return;
+    cur = s; render();
+  }
+  $('prev').addEventListener('click', () => shift(-1));
+  $('next').addEventListener('click', () => shift(1));
+  $('goToday').addEventListener('click', () => { cur = ymd(new Date()); render(); });
+  $('datePick').addEventListener('change', (ev) => { if (ev.target.value) { cur = ev.target.value; render(); } });
+
+  // 내보내기 / 백업
+  function download(name, text, type) {
+    const blob = new Blob([text], { type });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  $('exportCsv').addEventListener('click', () => {
+    const cols = ['날짜', '두통(0~2)', '자고나서생김', '수면시간', '아침', '점심', '저녁', '스트레스(1~10)', '운동'];
+    const esc = (v) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+    const rows = Object.keys(db).sort().map((k) => {
+      const e = db[k];
+      return [k, e.headache ?? '', e.afterSleep ? 'O' : '', e.sleep ?? '', e.breakfast, e.lunch, e.dinner, e.stress ?? '', e.exercise ? 'O' : ''].map(esc).join(',');
+    });
+    download('두통일기_' + ymd(new Date()) + '.csv', '﻿' + [cols.map(esc).join(',')].concat(rows).join('\n'), 'text/csv');
+  });
+  $('exportJson').addEventListener('click', () => {
+    download('두통일기_백업_' + ymd(new Date()) + '.json', JSON.stringify(db, null, 2), 'application/json');
+  });
+  $('importJson').addEventListener('change', (ev) => {
+    const f = ev.target.files[0]; if (!f) return;
+    const r = new FileReader();
+    r.onload = () => {
+      try {
+        const data = JSON.parse(r.result);
+        if (typeof data !== 'object' || Array.isArray(data)) throw 0;
+        if (!confirm('백업을 불러올까요? 같은 날짜의 기록은 백업 내용으로 바뀝니다.')) return;
+        db = Object.assign(db, data); persist(); render();
+        alert('불러오기 완료');
+      } catch (e) { alert('백업 파일을 읽을 수 없어요'); }
+      ev.target.value = '';
+    };
+    r.readAsText(f);
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
