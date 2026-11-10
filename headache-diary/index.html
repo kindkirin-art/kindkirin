@@ -76,6 +76,21 @@
     height: 42px; border-radius: 10px; border: 1px solid var(--line); background: var(--card);
     color: var(--text); font-size: 13px; font-family: inherit; display: flex; align-items: center; justify-content: center;
   }
+  .an-note { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
+  .an-sub { font-weight: 600; font-size: 14px; margin: 14px 0 8px; }
+  .an-sub:first-child { margin-top: 0; }
+  .an-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .an-table th, .an-table td { padding: 7px 4px; text-align: right; border-bottom: 1px solid var(--line); }
+  .an-table th { color: var(--muted); font-weight: 400; font-size: 12px; }
+  .an-table th:first-child, .an-table td:first-child { text-align: left; }
+  .an-item { padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .an-item:last-child { border-bottom: 0; }
+  .an-item .t { font-weight: 600; font-size: 15px; }
+  .an-item .t em { font-style: normal; color: var(--accent); font-size: 13px; font-weight: 600; margin-left: 6px; }
+  .an-item .s { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .an-bar { height: 8px; border-radius: 4px; background: var(--line); margin-top: 6px; position: relative; overflow: hidden; }
+  .an-bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--bad); border-radius: 4px; }
+  .an-bar b { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--text); }
   .empty { color: var(--muted); font-size: 14px; text-align: center; padding: 12px; }
 </style>
 </head>
@@ -155,6 +170,9 @@
     <button id="exportJson">백업 저장</button>
     <label>백업 불러오기<input type="file" id="importJson" accept=".json,application/json" hidden></label>
   </div>
+
+  <h2>두통 유발 인자 분석</h2>
+  <section class="card" id="analysis"></section>
 </main>
 
 <script>
@@ -217,6 +235,7 @@
     $('dinner').value = e.dinner || '';
     $('exercise').checked = !!e.exercise;
     renderHistory();
+    renderAnalysis();
   }
 
   function setSeg(id, v) {
@@ -257,6 +276,127 @@
       li.addEventListener('click', () => { cur = k; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
       ul.appendChild(li);
     });
+  }
+
+  // ───── 두통 유발 인자 분석 ─────
+  function addDays(s, n) { const d = parse(s); d.setDate(d.getDate() + n); return ymd(d); }
+  const isHA = (e) => !!e && (e.headache === 1 || e.headache === 2);
+  const hasSleep = (e) => e.sleep !== '' && e.sleep != null;
+  function foods(e) {
+    const set = new Set();
+    [e.breakfast, e.lunch, e.dinner].forEach((t) => {
+      (t || '').split(/[\s,.·\/+&()]+/).forEach((w) => { if (w) set.add(w); });
+    });
+    return set;
+  }
+  const pct = (x) => Math.round(x * 100) + '%';
+  const LAG = ['당일', '1일 뒤', '2일 뒤', '3일 뒤'];
+
+  // 우연히 이만큼 겹칠 확률 (피셔 정확검정, 단측)
+  function chance(eH, eN, uH, uN) {
+    const lf = (n) => { let v = 0; for (let i = 2; i <= n; i++) v += Math.log(i); return v; };
+    const lc = (n, k) => lf(n) - lf(k) - lf(n - k);
+    const N = eN + uN, K = eH + uH; let p = 0;
+    for (let x = eH; x <= Math.min(K, eN); x++) {
+      if (K - x > uN) continue;
+      p += Math.exp(lc(K, x) + lc(N - K, eN - x) - lc(N, eN));
+    }
+    return p;
+  }
+
+  function analyze() {
+    const days = Object.keys(db).filter((k) => db[k] && db[k].headache != null).sort();
+    // 두통 "시작일": 두통이 있고, 전날은 두통이 아니었던 날 (이어지는 두통은 한 번으로 셈)
+    const onset = {};
+    days.forEach((k) => { if (isHA(db[k]) && !isHA(db[addDays(k, -1)])) onset[k] = true; });
+    const nOnset = Object.keys(onset).length;
+    // 결과로 쓸 수 있는 날: 두통 시작일이거나 두통 없는 날 (이어지는 두통일은 제외)
+    const evaluable = (k) => db[k] && db[k].headache != null && (onset[k] || !isHA(db[k]));
+
+    // 1) 두통 시작 1~3일 전 vs 그 외 날
+    const pre = {};
+    Object.keys(onset).forEach((k) => { [1, 2, 3].forEach((n) => { pre[addDays(k, -n)] = true; }); });
+    const grp = { pre: { sl: [], st: [], ex: [] }, etc: { sl: [], st: [], ex: [] } };
+    Object.keys(db).forEach((k) => {
+      const e = db[k]; if (!e) return;
+      const g = pre[k] ? grp.pre : grp.etc;
+      if (hasSleep(e)) g.sl.push(Number(e.sleep));
+      if (e.stress) g.st.push(e.stress);
+      g.ex.push(e.exercise ? 1 : 0);
+    });
+
+    // 2) 인자별: 인자가 있던 날의 n일 뒤 두통 시작 비율 vs 인자가 없던 날
+    const factors = [
+      { name: '수면 6시간 미만', known: hasSleep, on: (e) => Number(e.sleep) < 6 },
+      { name: '수면 9시간 이상', known: hasSleep, on: (e) => Number(e.sleep) >= 9 },
+      { name: '스트레스 7 이상', known: (e) => !!e.stress, on: (e) => e.stress >= 7 },
+      { name: '운동 안 함', known: () => true, on: (e) => !e.exercise },
+      { name: '아침 거름(미기록)', known: () => true, on: (e) => !e.breakfast },
+      { name: '점심 거름(미기록)', known: () => true, on: (e) => !e.lunch },
+      { name: '저녁 거름(미기록)', known: () => true, on: (e) => !e.dinner }
+    ];
+    const foodDays = {};
+    Object.keys(db).forEach((k) => { foods(db[k] || {}).forEach((w) => { foodDays[w] = (foodDays[w] || 0) + 1; }); });
+    Object.keys(foodDays).forEach((w) => {
+      if (foodDays[w] >= 3) factors.push({ name: '음식: ' + w, known: () => true, on: (e) => foods(e).has(w) });
+    });
+
+    const found = [];
+    factors.forEach((f) => {
+      let best = null;
+      for (let lag = 0; lag <= 3; lag++) {
+        let eN = 0, eH = 0, uN = 0, uH = 0;
+        Object.keys(db).forEach((k) => {
+          const e = db[k]; if (!e || !f.known(e)) return;
+          const t = addDays(k, lag); if (!evaluable(t)) return;
+          if (f.on(e)) { eN++; if (onset[t]) eH++; } else { uN++; if (onset[t]) uH++; }
+        });
+        if (eN < 3 || uN < 3 || eH < 2) continue;
+        const rE = eH / eN, rU = uH / uN, diff = rE - rU;
+        if (diff >= 0.15 && chance(eH, eN, uH, uN) < 0.05 && (!best || diff > best.diff)) best = { name: f.name, lag, eN, eH, uN, uH, rE, rU, diff };
+      }
+      if (best) found.push(best);
+    });
+    found.sort((a, b) => b.diff - a.diff);
+    return { nDays: days.length, nOnset, grp, found: found.slice(0, 8) };
+  }
+
+  function renderAnalysis() {
+    const box = $('analysis');
+    const a = analyze();
+    if (a.nDays < 7 || a.nOnset < 2) {
+      box.innerHTML = '<p class="an-note" style="margin:0">분석하려면 기록 7일 이상, 두통 2회 이상이 필요해요.<br>현재 기록 ' +
+        a.nDays + '일 · 두통 ' + a.nOnset + '회</p>';
+      return;
+    }
+    const avg = (arr) => arr.length ? arr.reduce((x, y) => x + y, 0) / arr.length : null;
+    const f1 = (v, unit) => v == null ? '-' : (Math.round(v * 10) / 10) + unit;
+    const g = a.grp;
+    let h = '<p class="an-note">기록 ' + a.nDays + '일 · 두통 ' + a.nOnset + '회 기준' +
+      (a.nDays < 30 ? ' (기록이 적어 아직은 참고용이에요)' : '') + '</p>';
+
+    h += '<div class="an-sub">두통 시작 1~3일 전의 공통점</div>' +
+      '<table class="an-table"><tr><th></th><th>두통 1~3일 전</th><th>그 외 날</th></tr>' +
+      '<tr><td>평균 수면</td><td>' + f1(avg(g.pre.sl), 'h') + '</td><td>' + f1(avg(g.etc.sl), 'h') + '</td></tr>' +
+      '<tr><td>평균 스트레스</td><td>' + f1(avg(g.pre.st), '') + '</td><td>' + f1(avg(g.etc.st), '') + '</td></tr>' +
+      '<tr><td>운동한 날</td><td>' + (g.pre.ex.length ? pct(avg(g.pre.ex)) : '-') + '</td><td>' +
+      (g.etc.ex.length ? pct(avg(g.etc.ex)) : '-') + '</td></tr></table>';
+
+    h += '<div class="an-sub">의심되는 유발 인자</div>';
+    if (!a.found.length) {
+      h += '<p class="an-note" style="margin:0">아직 뚜렷하게 겹치는 인자가 없어요. 기록이 더 쌓이면 다시 계산돼요.</p>';
+    } else {
+      a.found.forEach((x) => {
+        h += '<div class="an-item"><div class="t"><span></span><em>' + LAG[x.lag] + ' 두통</em></div>' +
+          '<div class="s">이런 날 ' + x.eN + '번 중 ' + x.eH + '번(' + pct(x.rE) + ') ' + LAG[x.lag] +
+          ' 두통 시작 · 아닌 날은 ' + x.uN + '번 중 ' + x.uH + '번(' + pct(x.rU) + ')</div>' +
+          '<div class="an-bar"><i style="width:' + pct(x.rE) + '"></i><b style="left:' + pct(x.rU) + '"></b></div></div>';
+      });
+    }
+    h += '<p class="an-note" style="margin:12px 0 0">빨간 막대는 그 인자가 있던 날의 두통 비율, 세로선은 없던 날의 비율이에요. ' +
+      '함께 나타난 정도를 보여줄 뿐 원인을 확정하는 것은 아니에요.</p>';
+    box.innerHTML = h;
+    box.querySelectorAll('.an-item .t span').forEach((el, i) => { el.textContent = a.found[i].name; });
   }
 
   // 이벤트
