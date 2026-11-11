@@ -142,6 +142,7 @@ section { display: flex; flex-direction: column; gap: 14px; border-top: 1px soli
 .empty { color: var(--muted); font-size: 14px; }
 .bak { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .bak button, .filebtn { min-height: 44px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 4px 4px; font-size: 13.5px; white-space: nowrap; min-width: 0; cursor: pointer; }
+#bakInfo.warn { color: var(--bad); }
 .vh { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
 .vh:focus-visible + * , .filebtn:focus-within { outline: 2px solid var(--accent); }
 @media (max-width: 380px) { .seg button { font-size: 13px; } .pos .seg { grid-auto-columns: 60px; } }
@@ -229,13 +230,14 @@ section { display: flex; flex-direction: column; gap: 14px; border-top: 1px soli
 
   <section aria-labelledby="bak-h" id="backup" hidden>
     <h2 id="bak-h">백업</h2>
-    <p class="muted">기록은 이 기기의 이 브라우저에만 저장됩니다. 브라우저 데이터를 지우면 함께 사라지니 가끔 "백업 저장"으로 파일을 받아 두세요. 다른 기기로 옮길 때는 그 파일을 "백업 불러오기"로 넣으면 됩니다. CSV는 엑셀에서 보는 용도라 불러올 수 없습니다.</p>
+    <p class="muted">기록은 이 기기의 이 브라우저에만 저장됩니다. 브라우저 데이터를 지우면 함께 사라지니 가끔 "드라이브 백업"을 눌러 공유 창에서 "Drive에 저장"을 골라 두세요. 복원하거나 다른 기기로 옮길 때는 그 파일을 "백업 불러오기"로 넣으면 됩니다. CSV는 엑셀에서 보는 용도라 불러올 수 없습니다.</p>
     <div class="bak">
       <button type="button" id="csv">CSV로 내보내기</button>
-      <button type="button" id="exp">백업 저장</button>
+      <button type="button" id="exp">드라이브 백업</button>
       <label class="filebtn" for="imp">백업 불러오기</label>
-      <input type="file" id="imp" accept="application/json,.json" class="vh">
+      <input type="file" id="imp" accept=".txt,.json,text/plain,application/json" class="vh">
     </div>
+    <p class="muted" id="bakInfo"></p>
     <p class="muted" id="bakMsg" role="status"></p>
   </section>
 </div>
@@ -424,7 +426,7 @@ section { display: flex; flex-direction: column; gap: 14px; border-top: 1px soli
       pending--;
       setStatus(err && err.code === "invalid_argument" ? "이 계정으로는 저장할 수 없습니다." : "저장하지 못했습니다. 다시 눌러 주세요.", true);
     });
-    renderHistory(); renderForm();
+    renderHistory(); renderForm(); if (LOCAL && store) renderBakInfo();
   }
   function changed() {
     renderForm();
@@ -510,6 +512,18 @@ section { display: flex; flex-direction: column; gap: 14px; border-top: 1px soli
     a.download = name;
     document.body.appendChild(a); a.click(); a.remove();
   }
+  var BK = "trend-diary-last-backup";
+  function renderBakInfo() {
+    var el = $("bakInfo"), last = null;
+    try { last = localStorage.getItem(BK); } catch (e) {}
+    el.classList.remove("warn");
+    if (!entries.size) { el.textContent = ""; return; }
+    if (!last) { el.textContent = "아직 백업한 적이 없습니다."; el.classList.add("warn"); return; }
+    var days = diff(today, last), d = parse(last);
+    el.textContent = "마지막 백업: " + (d.getMonth() + 1) + "월 " + d.getDate() + "일 (" + (days > 0 ? days + "일 전" : "오늘") + ")";
+    if (days >= 7) el.classList.add("warn");
+  }
+  renderBakInfo();
   $("csv").addEventListener("click", function () {
     if (timer) saveNow();
     var POS = { "in": "보유", out: "매도" }, RULE = { kept: "지켰다", broke: "어겼다" }, URGE = { none: "없었다", buy: "사고 싶었다", sell: "팔고 싶었다" };
@@ -525,8 +539,16 @@ section { display: flex; flex-direction: column; gap: 14px; border-top: 1px soli
   $("exp").addEventListener("click", function () {
     if (timer) saveNow();
     var o = {}; entries.forEach(function (e, d) { o[d] = e; });
-    download(JSON.stringify(o, null, 1), "application/json", "trend-diary-" + today + ".json");
-    $("bakMsg").textContent = entries.size + "일치 기록을 백업 파일로 저장했습니다.";
+    /* 휴대폰 공유 창을 열어 "Drive에 저장"을 고르게 한다. 안드로이드 크롬이 .json 공유를 막아서 확장자만 .txt */
+    var name = "trend-diary-backup-" + today + ".txt", text = JSON.stringify(o, null, 1), n = entries.size, file = null;
+    try { file = new File([text], name, { type: "text/plain" }); } catch (e) {}
+    function done(msg) { try { localStorage.setItem(BK, today); } catch (e) {} renderBakInfo(); $("bakMsg").textContent = n + msg; }
+    function asFile() { download(text, "text/plain", name); done("일치 기록을 백업 파일로 내려받았습니다."); }
+    if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], title: "추세추종 일기 백업" }).then(function () {
+        done("일치 기록을 공유 창으로 보냈습니다.");
+      }, function (e) { if (e && e.name === "AbortError") $("bakMsg").textContent = "백업을 취소했습니다."; else asFile(); });
+    } else asFile();
   });
   $("imp").addEventListener("change", function () {
     var f = $("imp").files[0]; if (!f) return;
@@ -542,10 +564,10 @@ section { display: flex; flex-direction: column; gap: 14px; border-top: 1px soli
         });
         localStorage.setItem(KEY, JSON.stringify(cur0));
         entries = new Map(Object.keys(cur0).map(function (d) { return [d, cur0[d]]; }));
-        loadForm(); renderForm(); renderHistory();
+        loadForm(); renderForm(); renderHistory(); renderBakInfo();
         setStatus(entries.has(today) ? "오늘 기록함" : "오늘 기록 전");
         $("bakMsg").textContent = n ? n + "일치 기록을 불러왔습니다." : "새로 불러올 기록이 없습니다. 이미 같은 기록이 있습니다.";
-      } catch (e) { $("bakMsg").textContent = "불러오지 못했습니다. \"백업 저장\"으로 받은 파일인지 확인해 주세요."; }
+      } catch (e) { $("bakMsg").textContent = "불러오지 못했습니다. \"드라이브 백업\"으로 만든 파일인지 확인해 주세요."; }
       $("imp").value = "";
     };
     r.readAsText(f);
