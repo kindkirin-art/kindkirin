@@ -91,6 +91,8 @@
   .an-bar { height: 8px; border-radius: 4px; background: var(--line); margin-top: 6px; position: relative; overflow: hidden; }
   .an-bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--bad); border-radius: 4px; }
   .an-bar b { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--text); }
+  .backup-info { font-size: 12px; color: var(--muted); text-align: center; margin: 8px 0 0; }
+  .backup-info.warn { color: var(--bad); }
   .empty { color: var(--muted); font-size: 14px; text-align: center; padding: 12px; }
 </style>
 </head>
@@ -167,9 +169,10 @@
 
   <div class="tools">
     <button id="exportCsv">CSV 내보내기</button>
-    <button id="exportJson">백업 저장</button>
-    <label>백업 불러오기<input type="file" id="importJson" accept=".json,application/json" hidden></label>
+    <button id="exportJson">드라이브 백업</button>
+    <label>백업 불러오기<input type="file" id="importJson" accept=".txt,.json,text/plain,application/json" hidden></label>
   </div>
+  <p class="backup-info" id="backupInfo"></p>
 
   <h2>두통 유발 인자 분석</h2>
   <section class="card" id="analysis"></section>
@@ -236,6 +239,7 @@
     $('exercise').checked = !!e.exercise;
     renderHistory();
     renderAnalysis();
+    if (typeof renderBackupInfo === 'function') renderBackupInfo();
   }
 
   function setSeg(id, v) {
@@ -459,10 +463,37 @@
       const e = db[k];
       return [k, e.headache ?? '', e.afterSleep ? 'O' : '', e.tylenol ? 'O' : '', e.rxMed ? 'O' : '', e.sleep ?? '', e.breakfast, e.lunch, e.dinner, e.stress ?? '', e.exercise ? 'O' : ''].map(esc).join(',');
     });
-    download('두통일기_' + ymd(new Date()) + '.csv', '﻿' + [cols.map(esc).join(',')].concat(rows).join('\n'), 'text/csv');
+    download('headache-diary-' + ymd(new Date()) + '.csv', '﻿' + [cols.map(esc).join(',')].concat(rows).join('\n'), 'text/csv');
   });
-  $('exportJson').addEventListener('click', () => {
-    download('두통일기_백업_' + ymd(new Date()) + '.json', JSON.stringify(db, null, 2), 'application/json');
+  // 드라이브 백업: 휴대폰 공유 창을 열어 "Drive에 저장"을 고르게 함
+  // (안드로이드 크롬은 .json 공유를 막아서 내용은 JSON 그대로, 확장자만 .txt)
+  const BK = 'headache-diary-last-backup';
+  function renderBackupInfo() {
+    let last = null; try { last = localStorage.getItem(BK); } catch (e) {}
+    const el = $('backupInfo');
+    if (!Object.keys(db).length) { el.textContent = ''; return; }
+    if (!last) { el.textContent = '아직 백업한 적이 없어요'; el.className = 'backup-info warn'; return; }
+    const days = Math.round((parse(ymd(new Date())) - parse(last)) / 86400000);
+    el.textContent = '마지막 백업: ' + label(last) + (days ? ' (' + days + '일 전)' : ' (오늘)');
+    el.className = 'backup-info' + (days >= 7 ? ' warn' : '');
+  }
+  function markBackup() { try { localStorage.setItem(BK, ymd(new Date())); } catch (e) {} renderBackupInfo(); }
+
+  $('exportJson').addEventListener('click', async () => {
+    const name = 'headache-backup-' + ymd(new Date()) + '.txt';
+    const text = JSON.stringify(db, null, 2);
+    const file = new File([text], name, { type: 'text/plain' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: '두통일기 백업' });
+        markBackup();
+      } catch (e) {
+        if (e.name !== 'AbortError') { download(name, text, 'text/plain'); markBackup(); }
+      }
+    } else {
+      download(name, text, 'text/plain');
+      markBackup();
+    }
   });
   $('importJson').addEventListener('change', (ev) => {
     const f = ev.target.files[0]; if (!f) return;
@@ -481,6 +512,7 @@
   });
 
   render();
+  renderBackupInfo();
 })();
 </script>
 </body>
