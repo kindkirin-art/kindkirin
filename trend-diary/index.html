@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}</style>
+<title>추세추종 일기</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+KR:wght@400;500;700&family=Nanum+Myeongjo:wght@700;800&display=swap">
+<style>
+/* Layout: one narrow column, thumb-sized tap rows from top to bottom; same tokens as the P1 운용 규칙 page */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --fg: #1b2230;
+  --muted: #5d6676;
+  --line: #dde1e8;
+  --accent: #2c4a7a;
+  --on-accent: #ffffff;
+  --tqqq: #3b5ba9;
+  --gold: #b08a1e;
+  --btc: #c4622d;
+  --good: #2f7a4f;
+  --warn: #a8641a;
+  --bad: #b23b3b;
+  --chip-bg: #eef1f6;
+  --display: "Nanum Myeongjo", "AppleMyungjo", "Batang", serif;
+  --body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12161d; --surface: #1a2029; --fg: #e4e8ef; --muted: #9aa3b2; --line: #2b3340;
+    --accent: #8fb0e6; --on-accent: #12161d; --tqqq: #7f9ae0; --gold: #d9b44a; --btc: #e88a55;
+    --good: #6cc495; --warn: #e0a35a; --bad: #e57a7a; --chip-bg: #232b37; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12161d; --surface: #1a2029; --fg: #e4e8ef; --muted: #9aa3b2; --line: #2b3340;
+  --accent: #8fb0e6; --on-accent: #12161d; --tqqq: #7f9ae0; --gold: #d9b44a; --btc: #e88a55;
+  --good: #6cc495; --warn: #e0a35a; --bad: #e57a7a; --chip-bg: #232b37; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 56px;
+}
+.wrap { max-width: 540px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+h1, h2 { font-family: var(--display); margin: 0; line-height: 1.25; text-wrap: balance; }
+h1 { font-size: 30px; font-weight: 800; }
+h2 { font-size: 20px; font-weight: 700; }
+p { margin: 0; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); font-size: 13px; }
+
+header { display: flex; flex-direction: column; gap: 14px; }
+.top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+#status { font-size: 12.5px; color: var(--muted); }
+#status.err { color: var(--bad); }
+.datenav { display: flex; align-items: center; gap: 8px; }
+.datenav button { width: 44px; height: 44px; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; font-size: 18px; flex: none; }
+.datenav button:disabled { opacity: .35; cursor: default; }
+#dateLabel { flex: 1; text-align: center; font-weight: 700; font-size: 17px; min-width: 0; }
+#dateLabel small { display: block; font-weight: 400; color: var(--muted); font-size: 12.5px; }
+
+.form { display: flex; flex-direction: column; gap: 22px; }
+.q { display: flex; flex-direction: column; gap: 8px; }
+.q > .label { font-weight: 700; font-size: 14px; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.q > .label span { font-weight: 400; color: var(--muted); font-size: 12.5px; }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; }
+.seg button, .chips button {
+  min-height: 44px; border: 1px solid var(--line); background: var(--surface); border-radius: 8px;
+  padding: 4px 6px; font-size: 14px; min-width: 0;
+}
+.seg button[aria-pressed="true"], .chips button[aria-pressed="true"] {
+  background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 700;
+}
+#fomo button[aria-pressed="true"] { background: var(--warn); border-color: var(--warn); }
+.seg button[data-v="broke"][aria-pressed="true"] { background: var(--bad); border-color: var(--bad); }
+.seg button[data-v="kept"][aria-pressed="true"] { background: var(--good); border-color: var(--good); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button { padding: 4px 14px; border-radius: 999px; min-height: 40px; }
+
+.pos { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.pos .row { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.pos .row:last-child { border-bottom: 0; }
+.pos .line { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.pos .name { font-weight: 700; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: var(--c); flex: none; }
+.pos .seg { grid-auto-columns: 68px; }
+.pos .seg button { min-height: 38px; font-size: 13.5px; }
+.pos .seg button[data-v="in"][aria-pressed="true"] { background: var(--good); border-color: var(--good); }
+.pos .seg button[data-v="out"][aria-pressed="true"] { background: var(--warn); border-color: var(--warn); }
+.pos .sub { font-size: 13px; color: var(--muted); }
+.pos .sub b { color: var(--fg); }
+
+.remind { border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; display: flex; flex-direction: column; gap: 4px; }
+.remind p:first-child { font-family: var(--display); font-size: 17px; font-weight: 700; line-height: 1.4; }
+.remind.loud { border-left-color: var(--warn); }
+
+textarea {
+  font: inherit; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+  padding: 10px 12px; width: 100%; resize: vertical; min-height: 46px;
+}
+.del { align-self: flex-start; background: none; border: 0; padding: 6px 0; color: var(--muted); font-size: 13px; text-decoration: underline; }
+.del.sure { color: var(--bad); font-weight: 700; }
+
+section { display: flex; flex-direction: column; gap: 14px; border-top: 1px solid var(--line); padding-top: 24px; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.stats div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.stats b { font-family: var(--mono); font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stats span { font-size: 12.5px; color: var(--muted); }
+.cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cal .wd { text-align: center; font-size: 11.5px; color: var(--muted); }
+.cal button {
+  aspect-ratio: 1; max-height: 52px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface);
+  font-family: var(--mono); font-size: 12.5px; padding: 0; position: relative; color: var(--muted);
+}
+.cal button.has { color: var(--fg); border-color: transparent; }
+.cal button.f0 { background: color-mix(in srgb, var(--good) 22%, var(--surface)); }
+.cal button.f1 { background: color-mix(in srgb, var(--warn) 18%, var(--surface)); }
+.cal button.f2 { background: color-mix(in srgb, var(--warn) 38%, var(--surface)); }
+.cal button.f3 { background: color-mix(in srgb, var(--warn) 62%, var(--surface)); }
+.cal button.f4 { background: color-mix(in srgb, var(--warn) 88%, var(--surface)); color: var(--on-accent); }
+.cal button.fx { background: var(--chip-bg); }
+.cal button.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cal button.broke::after { content: ""; position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--bad); }
+.cal button:disabled { opacity: .3; cursor: default; }
+.key { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); align-items: center; }
+.key i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; }
+.key i.rd { border-radius: 50%; width: 7px; height: 7px; background: var(--bad); vertical-align: 1px; }
+.log { display: flex; flex-direction: column; }
+.log button { text-align: left; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 10px 0; display: flex; flex-direction: column; gap: 2px; }
+.log button:last-child { border-bottom: 0; }
+.log .d { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+.empty { color: var(--muted); font-size: 14px; }
+.bak { display: flex; flex-wrap: wrap; gap: 8px; }
+.bak button, .filebtn { min-height: 44px; display: inline-flex; align-items: center; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 4px 16px; font-size: 14px; cursor: pointer; }
+.vh { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+.vh:focus-visible + * , .filebtn:focus-within { outline: 2px solid var(--accent); }
+@media (max-width: 380px) { .seg button { font-size: 13px; } .pos .seg { grid-auto-columns: 60px; } }
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="top">
+      <h1>추세추종 일기</h1>
+      <span id="status" role="status">불러오는 중…</span>
+    </div>
+    <div class="datenav">
+      <button type="button" id="prev" aria-label="전날">‹</button>
+      <div id="dateLabel"></div>
+      <button type="button" id="next" aria-label="다음 날">›</button>
+    </div>
+  </header>
+
+  <div class="form">
+    <div class="q">
+      <div class="label">오늘 마음</div>
+      <div class="seg" id="mood" data-field="mood">
+        <button type="button" data-v="1">힘듦</button><button type="button" data-v="2">불안</button><button type="button" data-v="3">보통</button><button type="button" data-v="4">편안</button><button type="button" data-v="5">평온</button>
+      </div>
+    </div>
+
+    <div class="q">
+      <div class="label">포모 강도</div>
+      <div class="seg" id="fomo" data-field="fomo">
+        <button type="button" data-v="0">없음</button><button type="button" data-v="1">약함</button><button type="button" data-v="2">보통</button><button type="button" data-v="3">강함</button><button type="button" data-v="4">극심</button>
+      </div>
+    </div>
+
+    <div class="q">
+      <div class="label">느낀 감정 <span>여러 개 선택</span></div>
+      <div class="chips" id="feelings"></div>
+    </div>
+
+    <div class="q">
+      <div class="label">포지션 <span>어제 상태가 그대로 채워집니다</span></div>
+      <div class="pos" id="pos"></div>
+    </div>
+
+    <div class="remind" id="remind" hidden>
+      <p>매도는 내 판단이 아니라 규칙이 한 일입니다.</p>
+      <p class="muted" id="remindSub"></p>
+    </div>
+
+    <div class="q">
+      <div class="label">오늘 규칙대로 했나요?</div>
+      <div class="seg" id="rule" data-field="rule">
+        <button type="button" data-v="kept">지켰다</button><button type="button" data-v="broke">어겼다</button>
+      </div>
+    </div>
+
+    <div class="q">
+      <div class="label">규칙 밖 충동</div>
+      <div class="seg" id="urge" data-field="urge">
+        <button type="button" data-v="none">없었다</button><button type="button" data-v="buy">사고 싶었다</button><button type="button" data-v="sell">팔고 싶었다</button>
+      </div>
+    </div>
+
+    <div class="q">
+      <label class="label" for="memo">한 줄 메모 <span>선택</span></label>
+      <textarea id="memo" rows="1" maxlength="300" placeholder="안 써도 됩니다"></textarea>
+    </div>
+
+    <button type="button" class="del" id="del" hidden>이 날 기록 지우기</button>
+  </div>
+
+  <section aria-labelledby="hist-h">
+    <h2 id="hist-h">지난 기록</h2>
+    <div class="stats">
+      <div><b id="sStreak">0</b><span>연속 기록(일)</span></div>
+      <div><b id="sRule">-</b><span>규칙 지킨 날</span></div>
+      <div><b id="sFomo">-</b><span>최근 7회 포모 평균</span></div>
+    </div>
+    <div class="cal" id="cal"></div>
+    <div class="key">
+      <span>포모</span>
+      <span><i style="background:color-mix(in srgb, var(--good) 22%, var(--surface))"></i>없음</span>
+      <span><i style="background:color-mix(in srgb, var(--warn) 38%, var(--surface))"></i>보통</span>
+      <span><i style="background:color-mix(in srgb, var(--warn) 88%, var(--surface))"></i>극심</span>
+      <span><i class="rd"></i>규칙 어긴 날</span>
+    </div>
+    <div class="log" id="log"></div>
+  </section>
+
+  <section aria-labelledby="bak-h" id="backup" hidden>
+    <h2 id="bak-h">백업</h2>
+    <p class="muted">기록은 이 기기의 이 브라우저에만 저장됩니다. 브라우저 데이터를 지우면 함께 사라지니 가끔 파일로 내보내 두세요. 다른 기기로 옮길 때도 내보낸 파일을 가져오면 됩니다.</p>
+    <div class="bak">
+      <button type="button" id="exp">기록 내보내기</button>
+      <label class="filebtn" for="imp">기록 가져오기</label>
+      <input type="file" id="imp" accept="application/json,.json" class="vh">
+    </div>
+    <p class="muted" id="bakMsg" role="status"></p>
+  </section>
+</div>
+
+<script>
+(function () {
+  var FEELINGS = ["평온", "확신", "안도", "지루함", "불안", "포모", "조급", "후회", "탐욕", "공포"];
+  var MOOD = { 1: "힘듦", 2: "불안", 3: "보통", 4: "편안", 5: "평온" };
+  var FOMO = ["없음", "약함", "보통", "강함", "극심"];
+  var ASSETS = [
+    { k: "tqqq", name: "TQQQ", c: "var(--tqqq)", outLabel: "SGOV 대기",
+      rebuy: "종가가 200일선×1.01 위에서 3일 연속 마감하면 다시 삽니다.",
+      sell: "종가가 200일선×0.99 아래에서 2일 연속 마감하면 팝니다." },
+    { k: "btc", name: "비트코인", c: "var(--btc)", outLabel: "원화 대기",
+      rebuy: "업비트 종가가 30일선×1.02 위에서 마감하면 다시 삽니다.",
+      sell: "업비트 종가가 30일선×0.98 아래에서 마감하면 팝니다." },
+    { k: "gold", name: "금", c: "var(--gold)", outLabel: "매도",
+      rebuy: "월말 종가가 12개월선×1.05 위에서 2개월 연속 마감하면 다시 삽니다.",
+      sell: "기본은 계속 보유합니다." }
+  ];
+  /* P1 운용 규칙 문서(2026-11-09 갱신)의 마지막 신호 */
+  var DEFAULT_POS = { tqqq: "out", btc: "out", gold: "in" };
+  var P1_OUT = { tqqq: "2026-11-02", btc: "2026-10-14" };
+  var WD = ["일", "월", "화", "수", "목", "금", "토"];
+
+  var $ = function (id) { return document.getElementById(id); };
+  function ymd(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+  function parse(s) { var p = s.split("-"); return new Date(+p[0], +p[1] - 1, +p[2]); }
+  function shift(s, n) { var d = parse(s); d.setDate(d.getDate() + n); return ymd(d); }
+  function diff(a, b) { return Math.round((parse(a) - parse(b)) / 86400000); }
+
+  var LOCAL = !(window.claude && window.claude.use), KEY = "trend-diary-v1";
+  function readLocal() { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } }
+  function localDb() {
+    function put(fn) { try { var o = readLocal(); fn(o); localStorage.setItem(KEY, JSON.stringify(o)); return Promise.resolve(); } catch (e) { return Promise.reject(e); } }
+    var q = {
+      orderBy: function () { return q; }, limit: function () { return q; },
+      onSnapshot: function (next) {
+        var o = readLocal();
+        next({ metadata: { fromCache: false }, docs: Object.keys(o).map(function (id) { return { id: id, data: function () { return o[id]; } }; }) });
+        return function () {};
+      }
+    };
+    return {
+      doc: function (path) {
+        var id = path.split("/")[1];
+        return { set: function (data) { return put(function (o) { o[id] = data; }); }, delete: function () { return put(function (o) { delete o[id]; }); } };
+      },
+      collection: function () { return q; }
+    };
+  }
+
+  var db = null, entries = new Map(), today = ymd(new Date()), cur = today, form = null;
+  var timer = null, pending = 0, chain = Promise.resolve(), loaded = false, failed = false;
+
+  function setStatus(t, err) { var s = $("status"); s.textContent = t; s.classList.toggle("err", !!err); }
+
+  function blank(date) {
+    var pos = Object.assign({}, DEFAULT_POS), best = null;
+    entries.forEach(function (e, d) { if (d < date && (!best || d > best)) best = d; });
+    if (best && entries.get(best).pos) pos = Object.assign(pos, entries.get(best).pos);
+    return { mood: null, fomo: null, feelings: [], pos: pos, rule: null, urge: null, memo: "" };
+  }
+  function loadForm() {
+    var e = entries.get(cur);
+    form = e ? JSON.parse(JSON.stringify(e)) : blank(cur);
+    if (!form.feelings) form.feelings = [];
+    if (!form.pos) form.pos = Object.assign({}, DEFAULT_POS);
+  }
+
+  function outSince(k) {
+    var dates = Array.from(entries.keys()).filter(function (d) { return d < cur; }).sort().reverse();
+    var start = cur, reachedFirst = true;
+    for (var i = 0; i < dates.length; i++) {
+      var p = entries.get(dates[i]).pos || {};
+      if (p[k] === "out") start = dates[i]; else { reachedFirst = false; break; }
+    }
+    if (reachedFirst && P1_OUT[k] && P1_OUT[k] < start) start = P1_OUT[k];
+    return start;
+  }
+
+  function press(box, val) {
+    box.querySelectorAll("button").forEach(function (b) {
+      var on = Array.isArray(val) ? val.indexOf(b.dataset.v) >= 0 : String(val) === b.dataset.v;
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+  }
+
+  function renderForm() {
+    var d = parse(cur), ago = diff(today, cur);
+    $("dateLabel").innerHTML = (d.getMonth() + 1) + "월 " + d.getDate() + "일 (" + WD[d.getDay()] + ")<small>" +
+      (ago === 0 ? "오늘" : ago === 1 ? "어제" : ago + "일 전") + (entries.has(cur) ? " · 기록함" : " · 아직 기록 없음") + "</small>";
+    $("next").disabled = cur >= today;
+    press($("mood"), form.mood); press($("fomo"), form.fomo);
+    press($("rule"), form.rule); press($("urge"), form.urge);
+    press($("feelings"), form.feelings);
+    if (document.activeElement !== $("memo")) $("memo").value = form.memo || "";
+    var anyOut = false;
+    ASSETS.forEach(function (a) {
+      var row = $("pos-" + a.k), st = form.pos[a.k] || "in";
+      press(row.querySelector(".seg"), st);
+      var sub = row.querySelector(".sub");
+      if (st === "out") {
+        anyOut = true;
+        var n = diff(cur, outSince(a.k)) + 1;
+        sub.innerHTML = "<b>" + a.outLabel + " <span class='num'>" + n + "</span>일째</b> · " + a.rebuy;
+      } else sub.textContent = a.sell;
+    });
+    var r = $("remind");
+    r.hidden = !anyOut;
+    var loud = (form.fomo || 0) >= 3 || form.urge === "buy";
+    r.classList.toggle("loud", loud);
+    $("remindSub").textContent = loud
+      ? "지금 사면 규칙을 버리는 것입니다. 추세가 돌아오면 규칙이 다시 사 줍니다. 그 사이 놓치는 구간은 큰 하락을 피한 값입니다."
+      : "추세가 돌아오면 규칙이 다시 사 줍니다. 그 사이 놓치는 구간은 큰 하락을 피한 값입니다.";
+    var del = $("del");
+    del.hidden = !entries.has(cur);
+    del.classList.remove("sure"); del.textContent = "이 날 기록 지우기";
+  }
+
+  function summary(e) {
+    var parts = [];
+    if (e.mood) parts.push(MOOD[e.mood]);
+    if (e.fomo != null) parts.push("포모 " + FOMO[e.fomo]);
+    if (e.feelings && e.feelings.length) parts.push(e.feelings.join(" "));
+    if (e.rule === "broke") parts.push("규칙 어김");
+    if (e.urge === "buy") parts.push("사고 싶었다");
+    if (e.urge === "sell") parts.push("팔고 싶었다");
+    return parts.join(" · ") || "기록";
+  }
+
+  function renderHistory() {
+    var s = 0, d = entries.has(today) ? today : shift(today, -1);
+    while (entries.has(d)) { s++; d = shift(d, -1); }
+    $("sStreak").textContent = s;
+    var kept = 0, ruled = 0, dates = Array.from(entries.keys()).sort().reverse(), fs = [];
+    dates.forEach(function (k) {
+      var e = entries.get(k);
+      if (e.rule) { ruled++; if (e.rule === "kept") kept++; }
+      if (e.fomo != null && fs.length < 7) fs.push(e.fomo);
+    });
+    $("sRule").textContent = ruled ? kept + "/" + ruled : "-";
+    $("sFomo").textContent = fs.length ? (fs.reduce(function (a, b) { return a + b; }, 0) / fs.length).toFixed(1) : "-";
+
+    var cal = $("cal"); cal.textContent = "";
+    ["월", "화", "수", "목", "금", "토", "일"].forEach(function (w) {
+      var h = document.createElement("div"); h.className = "wd"; h.textContent = w; cal.appendChild(h);
+    });
+    var t = parse(today), end = shift(today, (7 - t.getDay()) % 7), start = shift(end, -34);
+    for (var i = 0; i < 35; i++) {
+      var day = shift(start, i), b = document.createElement("button"), e = entries.get(day);
+      b.type = "button"; b.dataset.date = day; b.textContent = parse(day).getDate();
+      b.setAttribute("aria-label", day + (e ? " " + summary(e) : " 기록 없음"));
+      if (day > today) b.disabled = true;
+      if (e) { b.classList.add("has", [0, 1, 2, 3, 4].indexOf(e.fomo) >= 0 ? "f" + e.fomo : "fx"); if (e.rule === "broke") b.classList.add("broke"); }
+      if (day === cur) b.classList.add("sel");
+      cal.appendChild(b);
+    }
+
+    var log = $("log"); log.textContent = "";
+    if (!dates.length) {
+      var p = document.createElement("p"); p.className = "empty";
+      p.textContent = failed ? "기록을 불러오지 못했습니다." : loaded
+        ? "아직 기록이 없습니다. 위에서 오늘 마음을 한 번 누르면 첫 기록이 저장됩니다."
+        : "기록을 불러오는 중입니다.";
+      log.appendChild(p); return;
+    }
+    dates.slice(0, 10).forEach(function (k) {
+      var e = entries.get(k), b = document.createElement("button"), a = document.createElement("span"), c = document.createElement("span");
+      b.type = "button"; b.dataset.date = k;
+      a.className = "d"; a.textContent = k + " (" + WD[parse(k).getDay()] + ")";
+      c.textContent = summary(e) + (e.memo ? " · " + e.memo : "");
+      b.appendChild(a); b.appendChild(c); log.appendChild(b);
+    });
+  }
+
+  function busy() { return timer !== null || pending > 0; }
+
+  function saveNow() {
+    if (timer) { clearTimeout(timer); timer = null; }
+    if (!db) { setStatus(LOCAL ? "이 브라우저에서는 저장할 수 없습니다." : "저장할 수 없습니다. Claude에 로그인한 상태로 열어 주세요.", true); return; }
+    var date = cur, data = JSON.parse(JSON.stringify(form));
+    data.date = date; data.updatedAt = new Date().toISOString();
+    entries.set(date, data);
+    pending++; setStatus("저장 중…");
+    chain = chain.then(function () { return db.doc("entries/" + date).set(data); }).then(function () {
+      pending--; if (!busy()) setStatus("저장됨");
+    }, function (err) {
+      pending--;
+      setStatus(err && err.code === "invalid_argument" ? "이 계정으로는 저장할 수 없습니다." : "저장하지 못했습니다. 다시 눌러 주세요.", true);
+    });
+    renderHistory(); renderForm();
+  }
+  function changed() {
+    renderForm();
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(saveNow, 500);
+    setStatus("저장 중…");
+  }
+  function go(date) {
+    if (date > today) return;
+    if (timer) saveNow();
+    cur = date; loadForm(); renderForm(); renderHistory();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  /* build static parts */
+  FEELINGS.forEach(function (f) {
+    var b = document.createElement("button"); b.type = "button"; b.dataset.v = f; b.textContent = f; $("feelings").appendChild(b);
+  });
+  ASSETS.forEach(function (a) {
+    var row = document.createElement("div"); row.className = "row"; row.id = "pos-" + a.k;
+    row.innerHTML = "<div class='line'><div class='name'><span class='dot' style='--c:" + a.c + "'></span>" + a.name +
+      "</div><div class='seg' data-asset='" + a.k + "'><button type='button' data-v='in'>보유</button><button type='button' data-v='out'>매도</button></div></div><div class='sub'></div>";
+    $("pos").appendChild(row);
+  });
+
+  document.querySelectorAll(".seg[data-field]").forEach(function (box) {
+    box.addEventListener("click", function (ev) {
+      var b = ev.target.closest("button"); if (!b) return;
+      var f = box.dataset.field, v = (f === "mood" || f === "fomo") ? +b.dataset.v : b.dataset.v;
+      form[f] = form[f] === v ? null : v; changed();
+    });
+  });
+  $("feelings").addEventListener("click", function (ev) {
+    var b = ev.target.closest("button"); if (!b) return;
+    var i = form.feelings.indexOf(b.dataset.v);
+    if (i >= 0) form.feelings.splice(i, 1); else form.feelings.push(b.dataset.v);
+    changed();
+  });
+  $("pos").addEventListener("click", function (ev) {
+    var b = ev.target.closest("button"); if (!b) return;
+    form.pos[b.parentNode.dataset.asset] = b.dataset.v; changed();
+  });
+  $("memo").addEventListener("input", function () { form.memo = $("memo").value; changed(); });
+  $("prev").addEventListener("click", function () { go(shift(cur, -1)); });
+  $("next").addEventListener("click", function () { go(shift(cur, 1)); });
+  $("cal").addEventListener("click", function (ev) { var b = ev.target.closest("button"); if (b && !b.disabled) go(b.dataset.date); });
+  $("log").addEventListener("click", function (ev) { var b = ev.target.closest("button"); if (b) go(b.dataset.date); });
+  $("del").addEventListener("click", function () {
+    var del = $("del");
+    if (!del.classList.contains("sure")) { del.classList.add("sure"); del.textContent = "한 번 더 누르면 지워집니다"; return; }
+    if (!db) return;
+    if (timer) { clearTimeout(timer); timer = null; }
+    var date = cur; entries.delete(date);
+    pending++; setStatus("지우는 중…");
+    chain = chain.then(function () { return db.doc("entries/" + date).delete(); }).then(function () {
+      pending--; if (!busy()) setStatus("지웠습니다");
+    }, function () { pending--; setStatus("지우지 못했습니다.", true); });
+    loadForm(); renderForm(); renderHistory();
+  });
+
+  loadForm(); renderForm(); renderHistory();
+
+  function start(d) {
+    db = d;
+    if (!db) { loaded = true; failed = true; setStatus("저장소에 연결하지 못했습니다. Claude에 로그인한 상태로 열어 주세요.", true); renderHistory(); return; }
+    var slow = setTimeout(function () { if (!loaded) setStatus("기록을 아직 불러오지 못했습니다. 연결을 기다리는 중…", true); }, 10000);
+    db.collection("entries").orderBy("date", "desc").limit(500).onSnapshot(function (snap) {
+      if (snap.metadata && snap.metadata.fromCache === false) clearTimeout(slow);
+      if (busy()) return;
+      entries = new Map();
+      snap.docs.forEach(function (doc) { var e = doc.data(); if (e) entries.set(doc.id, e); });
+      var first = !loaded; loaded = true;
+      if (first || !$("status").classList.contains("err")) setStatus(entries.has(today) ? "오늘 기록함" : "오늘 기록 전");
+      if (document.activeElement !== $("memo")) { loadForm(); renderForm(); }
+      renderHistory();
+    }, function () {
+      clearTimeout(slow); loaded = true; failed = true;
+      setStatus("기록을 불러오지 못했습니다.", true); renderHistory();
+    });
+  }
+  if (!LOCAL) { window.claude.use("db").then(start, function () { start(null); }); return; }
+
+  /* standalone page: records live in this browser, with file backup */
+  var store = null;
+  try { localStorage.setItem(KEY + "-t", "1"); localStorage.removeItem(KEY + "-t"); store = localDb(); } catch (e) {}
+  if (!store) { loaded = true; failed = true; setStatus("이 브라우저에서는 저장할 수 없습니다.", true); renderHistory(); return; }
+  start(store);
+  $("backup").hidden = false;
+  $("exp").addEventListener("click", function () {
+    if (timer) saveNow();
+    var o = {}; entries.forEach(function (e, d) { o[d] = e; });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(o, null, 1)], { type: "application/json" }));
+    a.download = "trend-diary-" + today + ".json";
+    document.body.appendChild(a); a.click(); a.remove();
+    $("bakMsg").textContent = entries.size + "일치 기록을 파일로 내보냈습니다.";
+  });
+  $("imp").addEventListener("change", function () {
+    var f = $("imp").files[0]; if (!f) return;
+    var r = new FileReader();
+    r.onload = function () {
+      try {
+        var o = JSON.parse(r.result), cur0 = readLocal(), n = 0;
+        Object.keys(o).forEach(function (d) {
+          var e = o[d];
+          if (!/^\d{4}-\d\d-\d\d$/.test(d) || !e || typeof e !== "object" || Array.isArray(e)) return;
+          if (cur0[d] && String(cur0[d].updatedAt || "") >= String(e.updatedAt || "")) return;
+          cur0[d] = e; n++;
+        });
+        localStorage.setItem(KEY, JSON.stringify(cur0));
+        entries = new Map(Object.keys(cur0).map(function (d) { return [d, cur0[d]]; }));
+        loadForm(); renderForm(); renderHistory();
+        setStatus(entries.has(today) ? "오늘 기록함" : "오늘 기록 전");
+        $("bakMsg").textContent = n ? n + "일치 기록을 가져왔습니다." : "새로 가져올 기록이 없습니다. 이미 같은 기록이 있습니다.";
+      } catch (e) { $("bakMsg").textContent = "가져오지 못했습니다. 이 일기에서 내보낸 파일인지 확인해 주세요."; }
+      $("imp").value = "";
+    };
+    r.readAsText(f);
+  });
+})();
+</script>
+</body>
+</html>
