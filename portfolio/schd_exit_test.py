@@ -29,7 +29,7 @@ LEVELS = [(0.20, 0.25), (0.50, 0.25), (1.00, 0.50), (2.00, 0.50)]
 FEE = 0.001
 
 
-def engine(t, s, cashr, ma_t, rule=("with",), carry=False, sm=None, info=None):
+def engine(t, s, cashr, ma_t, rule=("with",), carry=False, sm=None, info=None, park_fee=0.0):
     """t, s: TQQQ / SCHD levels; ma_t: TQQQ 200d SMA; sm: SCHD SMA for 'sma' rules. Returns equity array."""
     cash, st, ss = 1.0, 0.0, 0.0
     inv, up, dn, entry, hit = False, 0, 0, 0.0, 0
@@ -51,11 +51,14 @@ def engine(t, s, cashr, ma_t, rule=("with",), carry=False, sm=None, info=None):
                 if info is not None:
                     info.append((i, "rebuy", age))
                 ss = 0.0
-            st, cash = cash / (1 + FEE) / p, 0.0
+            st, cash = cash * (1 - park_fee) / (1 + FEE) / p, 0.0
             inv, entry, hit = True, p, 0
         elif inv and dn >= 2:
             cash += st * p * (1 - FEE)
             st, inv, sold_now = 0.0, False, True
+            if rule[0] == "with":
+                cash = (cash + ss * q * (1 - FEE)) * (1 - park_fee)      # park_fee: cost of moving the proceeds into the parking ETF
+                ss = 0.0
             if ss:
                 if info is not None:
                     info.append((i, "tsell", ss * q / (cash + ss * q)))
