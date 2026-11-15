@@ -29,7 +29,7 @@ LEVELS = [(0.20, 0.25), (0.50, 0.25), (1.00, 0.50), (2.00, 0.50)]
 FEE = 0.001
 
 
-def engine(t, s, cashr, ma_t, rule=("with",), carry=False, sm=None, info=None, park_fee=0.0):
+def engine(t, s, cashr, ma_t, rule=("with",), carry=False, sm=None, info=None, park_fee=0.0, sig=None, band=0.01):
     """t, s: TQQQ / SCHD levels; ma_t: TQQQ 200d SMA; sm: SCHD SMA for 'sma' rules. Returns equity array."""
     cash, st, ss = 1.0, 0.0, 0.0
     inv, up, dn, entry, hit = False, 0, 0, 0.0, 0
@@ -41,9 +41,10 @@ def engine(t, s, cashr, ma_t, rule=("with",), carry=False, sm=None, info=None, p
         if cash > 0:
             cash *= 1 + cashr[i]
         p, m, q = t[i], ma_t[i], s[i]
+        x = p if sig is None else sig[i]                 # signal series (default: the traded ETF itself)
         if m == m:
-            up = up + 1 if p > m * 1.01 else 0
-            dn = dn + 1 if p < m * 0.99 else 0
+            up = up + 1 if x > m * (1 + band) else 0
+            dn = dn + 1 if x < m * (1 - band) else 0
         sold_now = False
         if not inv and m == m and up >= 3:
             if ss and not carry:
