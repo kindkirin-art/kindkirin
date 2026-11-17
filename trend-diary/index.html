@@ -125,6 +125,23 @@ section { display: flex; flex-direction: column; gap: 14px; border-top: 1px soli
 .log button:last-child { border-bottom: 0; }
 .log .d { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
 .empty { color: var(--muted); font-size: 14px; }
+#analysis { display: flex; flex-direction: column; gap: 10px; }
+.an-sub { font-weight: 700; font-size: 15px; margin-top: 8px; }
+.an-sub:first-child { margin-top: 0; }
+.an-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.an-table th, .an-table td { padding: 7px 4px; text-align: right; border-bottom: 1px solid var(--line); }
+.an-table th { color: var(--muted); font-weight: 400; font-size: 12px; }
+.an-table th:first-child, .an-table td:first-child { text-align: left; }
+.an-table td { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.an-table td:first-child { font-family: inherit; }
+.an-item { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.an-item:last-child { border-bottom: 0; }
+.an-item .t { font-weight: 700; }
+.an-item .t em { font-style: normal; color: var(--accent); font-size: 13px; margin-left: 6px; }
+.an-item .s { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.an-bar { height: 8px; border-radius: 4px; background: var(--line); margin-top: 6px; position: relative; overflow: hidden; }
+.an-bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--warn); border-radius: 4px; }
+.an-bar b { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--fg); }
 .bak { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .bak button, .filebtn { min-height: 44px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 4px 4px; font-size: 13.5px; white-space: nowrap; min-width: 0; cursor: pointer; }
 #bakInfo.warn { color: var(--bad); }
@@ -204,6 +221,11 @@ section { display: flex; flex-direction: column; gap: 14px; border-top: 1px soli
     </div>
     <div class="log" id="log"></div>
     <button type="button" class="more" id="logMore" hidden></button>
+  </section>
+
+  <section aria-labelledby="an-h">
+    <h2 id="an-h">규칙 흔들림 분석</h2>
+    <div id="analysis"></div>
   </section>
 
   <section aria-labelledby="bak-h" id="backup" hidden>
@@ -345,7 +367,137 @@ section { display: flex; flex-direction: column; gap: 14px; border-top: 1px soli
   }
 
   var logOpen = false;
+  // ───── 규칙 흔들림 분석 ─────
+  // 우연히 이만큼 겹칠 확률 (피셔 정확검정, 단측)
+  function chance(eH, eN, uH, uN) {
+    function lf(n) { var v = 0; for (var i = 2; i <= n; i++) v += Math.log(i); return v; }
+    function lc(n, k) { return lf(n) - lf(k) - lf(n - k); }
+    var N = eN + uN, K = eH + uH, p = 0;
+    for (var x = eH; x <= Math.min(K, eN); x++) {
+      if (K - x > uN) continue;
+      p += Math.exp(lc(K, x) + lc(N - K, eN - x) - lc(N, eN));
+    }
+    return p;
+  }
+  function pct(x) { return Math.round(x * 100) + "%"; }
+  function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+  // 날짜별 "대기(현금) 며칠째"를 TQQQ·비트코인 중 긴 쪽으로 계산
+  function waitDays() {
+    var out = {}, startOf = {}, dates = Array.from(entries.keys()).sort();
+    dates.forEach(function (d, i) {
+      var p = entries.get(d).pos || {}, best = 0;
+      ["tqqq", "btc"].forEach(function (k) {
+        if (p[k] === "out") {
+          if (!startOf[k]) startOf[k] = (i === 0 && P1_OUT[k] && P1_OUT[k] < d) ? P1_OUT[k] : d;
+          best = Math.max(best, diff(d, startOf[k]) + 1);
+        } else startOf[k] = null;
+      });
+      out[d] = best;
+    });
+    return out;
+  }
+
+  function renderAnalysis() {
+    var box = $("analysis"), all = Array.from(entries.keys()).sort();
+    if (!loaded) { box.innerHTML = "<p class='muted'>기록을 불러오는 중입니다.</p>"; return; }
+    var ruled = all.filter(function (d) { return entries.get(d).rule; });
+    var broke = ruled.filter(function (d) { return entries.get(d).rule === "broke"; });
+    if (all.length < 7) {
+      box.innerHTML = "<p class='muted'>기록이 7일 이상 쌓이면 분석이 나옵니다. 현재 " + all.length + "일</p>";
+      return;
+    }
+    var wait = waitDays(), h = "<p class='muted'>기록 " + all.length + "일 · 규칙 체크 " + ruled.length + "일 · 어긴 날 " + broke.length + "일" +
+      (all.length < 30 ? " (기록이 적어 아직은 참고용)" : "") + "</p>";
+    function avg(arr) { return arr.length ? arr.reduce(function (a, b) { return a + b; }, 0) / arr.length : null; }
+    function f1(v) { return v == null ? "-" : (Math.round(v * 10) / 10).toString(); }
+    function rate(arr) { return arr.length ? pct(avg(arr)) : "-"; }
+
+    // 1) 포모가 커지는 때: 대기 기간별 평균 포모
+    var buckets = [["보유 중", 0, 0], ["대기 1~7일", 1, 7], ["대기 8~30일", 8, 30], ["대기 31일+", 31, 1e9]];
+    h += "<div class='an-sub'>대기 기간별 포모</div><table class='an-table'><tr><th></th><th>기록</th><th>평균 포모</th><th>사고 싶었던 날</th></tr>";
+    buckets.forEach(function (b) {
+      var fs = [], buy = [], n = 0;
+      all.forEach(function (d) {
+        var w = wait[d], e = entries.get(d);
+        if (w < b[1] || w > b[2]) return;
+        n++;
+        if (e.fomo != null) fs.push(e.fomo);
+        if (e.urge) buy.push(e.urge === "buy" ? 1 : 0);
+      });
+      h += "<tr><td>" + b[0] + "</td><td>" + (n ? n + "일" : "-") + "</td><td>" + f1(avg(fs)) + "</td><td>" + rate(buy) + "</td></tr>";
+    });
+    h += "</table><p class='muted'>포모는 0 없음 ~ 3 강함. 대기가 길어질수록 숫자가 커지면 그 구간이 가장 조심할 때입니다.</p>";
+
+    // 2) 어긴 날 vs 지킨 날
+    if (broke.length && broke.length < ruled.length) {
+      var g = { b: { f: [], hard: [], buy: [], sell: [], w: [] }, k: { f: [], hard: [], buy: [], sell: [], w: [] } };
+      ruled.forEach(function (d) {
+        var e = entries.get(d), x = e.rule === "broke" ? g.b : g.k;
+        if (e.fomo != null) x.f.push(e.fomo);
+        if (e.mood) x.hard.push(e.mood <= 2 ? 1 : 0);
+        if (e.urge) { x.buy.push(e.urge === "buy" ? 1 : 0); x.sell.push(e.urge === "sell" ? 1 : 0); }
+        x.w.push(wait[d]);
+      });
+      h += "<div class='an-sub'>규칙 어긴 날의 공통점</div><table class='an-table'><tr><th></th><th>어긴 날</th><th>지킨 날</th></tr>" +
+        "<tr><td>평균 포모</td><td>" + f1(avg(g.b.f)) + "</td><td>" + f1(avg(g.k.f)) + "</td></tr>" +
+        "<tr><td>마음 힘듦·불안</td><td>" + rate(g.b.hard) + "</td><td>" + rate(g.k.hard) + "</td></tr>" +
+        "<tr><td>사고 싶었다</td><td>" + rate(g.b.buy) + "</td><td>" + rate(g.k.buy) + "</td></tr>" +
+        "<tr><td>팔고 싶었다</td><td>" + rate(g.b.sell) + "</td><td>" + rate(g.k.sell) + "</td></tr>" +
+        "<tr><td>평균 대기 일수</td><td>" + f1(avg(g.b.w)) + "</td><td>" + f1(avg(g.k.w)) + "</td></tr></table>";
+    }
+
+    // 3) 규칙을 흔드는 신호: 신호가 있던 날의 당일/1일 뒤/2일 뒤 규칙 어김 비율
+    if (broke.length >= 2) {
+      var LAG = ["당일", "다음 날", "2일 뒤"];
+      var sig = [
+        { n: "포모 보통 이상", k: function (e) { return e.fomo != null; }, on: function (e) { return e.fomo >= 2; } },
+        { n: "포모 강함", k: function (e) { return e.fomo != null; }, on: function (e) { return e.fomo >= 3; } },
+        { n: "마음 힘듦·불안", k: function (e) { return !!e.mood; }, on: function (e) { return e.mood <= 2; } },
+        { n: "사고 싶었다", k: function (e) { return !!e.urge; }, on: function (e) { return e.urge === "buy"; } },
+        { n: "팔고 싶었다", k: function (e) { return !!e.urge; }, on: function (e) { return e.urge === "sell"; } },
+        { n: "TQQQ 대기 중", k: function () { return true; }, on: function (e) { return (e.pos || {}).tqqq === "out"; } },
+        { n: "비트코인 대기 중", k: function () { return true; }, on: function (e) { return (e.pos || {}).btc === "out"; } },
+        { n: "대기 30일 넘음", k: function () { return true; }, on: function (e, d) { return wait[d] > 30; } },
+        { n: "월요일", k: function () { return true; }, on: function (e, d) { return parse(d).getDay() === 1; } }
+      ];
+      var found = [];
+      sig.forEach(function (f) {
+        var best = null;
+        for (var lag = 0; lag <= 2; lag++) {
+          var eN = 0, eH = 0, uN = 0, uH = 0;
+          all.forEach(function (d) {
+            var e = entries.get(d), t = entries.get(shift(d, lag));
+            if (!f.k(e) || !t || !t.rule) return;
+            var hit = t.rule === "broke";
+            if (f.on(e, d)) { eN++; if (hit) eH++; } else { uN++; if (hit) uH++; }
+          });
+          if (eN < 3 || uN < 3 || eH < 2) continue;
+          var rE = eH / eN, rU = uH / uN, df = rE - rU;
+          if (df >= 0.15 && chance(eH, eN, uH, uN) < 0.05 && (!best || df > best.df))
+            best = { n: f.n, lag: lag, eN: eN, eH: eH, uN: uN, uH: uH, rE: rE, rU: rU, df: df };
+        }
+        if (best) found.push(best);
+      });
+      found.sort(function (a, b) { return b.df - a.df; });
+      h += "<div class='an-sub'>규칙을 흔드는 신호</div>";
+      if (!found.length) h += "<p class='muted'>아직 뚜렷하게 겹치는 신호가 없습니다. 기록이 더 쌓이면 다시 계산됩니다.</p>";
+      found.slice(0, 6).forEach(function (x) {
+        h += "<div class='an-item'><div class='t'>" + esc(x.n) + "<em>" + LAG[x.lag] + " 규칙 어김</em></div>" +
+          "<div class='s'>이런 날 " + x.eN + "번 중 " + x.eH + "번(" + pct(x.rE) + ") " + LAG[x.lag] + " 어김 · 아닌 날은 " +
+          x.uN + "번 중 " + x.uH + "번(" + pct(x.rU) + ")</div>" +
+          "<div class='an-bar'><i style='width:" + pct(x.rE) + "'></i><b style='left:" + pct(x.rU) + "'></b></div></div>";
+      });
+      h += "<p class='muted'>주황 막대는 그 신호가 있던 날의 규칙 어김 비율, 세로선은 없던 날의 비율입니다. 함께 나타난 정도일 뿐 원인을 확정하지는 않습니다.</p>";
+    } else if (ruled.length) {
+      h += "<div class='an-sub'>규칙을 흔드는 신호</div><p class='muted'>" +
+        (broke.length ? "어긴 날이 2일 이상 쌓이면 어떤 신호가 먼저 나타났는지 찾아 드립니다." : "아직 규칙을 어긴 날이 없습니다. 잘 지키고 있습니다.") + "</p>";
+    }
+    box.innerHTML = h;
+  }
+
   function renderHistory() {
+    renderAnalysis();
     var s = 0, d = entries.has(today) ? today : shift(today, -1);
     while (entries.has(d)) { s++; d = shift(d, -1); }
     $("sStreak").textContent = s;
