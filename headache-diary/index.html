@@ -100,6 +100,7 @@
   .an-bar { height: 8px; border-radius: 4px; background: var(--line); margin-top: 6px; position: relative; overflow: hidden; }
   .an-bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--bad); border-radius: 4px; }
   .an-bar b { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--text); }
+  .bak-desc { font-size: 13px; color: var(--muted); line-height: 1.5; margin: 0 0 10px; }
   .backup-info { font-size: 12px; color: var(--muted); text-align: center; margin: 8px 0 0; }
   .backup-info.warn { color: var(--bad); }
   .empty { color: var(--muted); font-size: 14px; text-align: center; padding: 12px; }
@@ -186,6 +187,7 @@
   <section class="card" id="analysis"></section>
 
   <h2>백업</h2>
+  <p class="bak-desc">기록은 이 기기의 이 브라우저에만 저장돼요. 브라우저 데이터를 지우면 함께 사라지니 가끔 "드라이브 백업"을 눌러 공유 창에서 "Drive에 저장"을 골라 두세요. 복원하거나 다른 기기로 옮길 때는 그 파일을 "백업 불러오기"로 넣으면 돼요. CSV는 엑셀에서 보는 용도라 불러올 수 없어요.</p>
   <div class="tools" style="margin-top:0">
     <button id="exportCsv">CSV 내보내기</button>
     <button id="exportJson">드라이브 백업</button>
