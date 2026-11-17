@@ -85,6 +85,7 @@
     color: var(--text); font-size: 13px; font-family: inherit; display: flex; align-items: center; justify-content: center;
   }
   .an-note { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
+  .an-sum { border-left: 3px solid var(--bad); padding: 4px 0 4px 12px; font-weight: 700; font-size: 15px; line-height: 1.45; margin: 0 0 14px; }
   .an-sub { font-weight: 600; font-size: 14px; margin: 14px 0 8px; }
   .an-sub:first-child { margin-top: 0; }
   .an-table { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -396,6 +397,36 @@
     return { nDays: days.length, nOnset, grp, found: found.slice(0, 8) };
   }
 
+  // 요약 한 줄: 가장 강한 유발 인자 → 두통 전 수면·스트레스·운동 차이 → 기본 문구
+  function summaryLine(a, avg) {
+    const WHEN = ['그날', '다음 날', '2일 뒤', '3일 뒤'];
+    const top = a.found[0];
+    if (top) {
+      const josa = (w) => { const c = w.charCodeAt(w.length - 1) - 0xAC00; return c < 0 || c > 11171 ? '을(를)' : (c % 28 ? '을' : '를'); };
+      const food = top.name.indexOf('음식: ') === 0 ? top.name.slice(4) : null;
+      const who = food ? "'" + food + "'" + josa(food) + ' 먹은 날' : "'" + top.name + "'인 날";
+      return who + ' ' + WHEN[top.lag] + ' 두통이 시작된 경우가 가장 많아요 (' + pct(top.rE) + ', 평소 ' + pct(top.rU) + ').';
+    }
+    const g = a.grp, c = [];
+    const sl = [avg(g.pre.sl), avg(g.etc.sl)], st = [avg(g.pre.st), avg(g.etc.st)], ex = [avg(g.pre.ex), avg(g.etc.ex)];
+    const r1 = (v) => Math.round(Math.abs(v) * 10) / 10;
+    if (sl[0] != null && sl[1] != null) {
+      const d = sl[0] - sl[1];
+      c.push({ score: Math.abs(d) / 0.5, text: '잠을 평소보다 ' + r1(d) + '시간 ' + (d < 0 ? '적게' : '많이') + ' 잤어요' });
+    }
+    if (st[0] != null && st[1] != null) {
+      const d = st[0] - st[1];
+      c.push({ score: Math.abs(d) / 1, text: '스트레스가 평소보다 ' + r1(d) + ' ' + (d > 0 ? '높았어요' : '낮았어요') });
+    }
+    if (ex[0] != null && ex[1] != null) {
+      const d = ex[0] - ex[1];
+      c.push({ score: Math.abs(d) / 0.15, text: '운동한 날이 평소보다 ' + Math.round(Math.abs(d) * 100) + '%p ' + (d < 0 ? '적었어요' : '많았어요') });
+    }
+    c.sort((x, y) => y.score - x.score);
+    if (c[0] && c[0].score >= 1) return '두통 1~3일 전에는 ' + c[0].text + '.';
+    return '아직 뚜렷한 유발 인자는 없어요. 기록이 더 쌓이면 다시 찾아볼게요.';
+  }
+
   function renderAnalysis() {
     const box = $('analysis');
     const a = analyze();
@@ -408,7 +439,8 @@
     const f1 = (v, unit) => v == null ? '-' : (Math.round(v * 10) / 10) + unit;
     const g = a.grp;
     let h = '<p class="an-note">기록 ' + a.nDays + '일 · 두통 ' + a.nOnset + '회 기준' +
-      (a.nDays < 30 ? ' (기록이 적어 아직은 참고용이에요)' : '') + '</p>';
+      (a.nDays < 30 ? ' (기록이 적어 아직은 참고용이에요)' : '') + '</p>' +
+      '<p class="an-sum" id="anSum"></p>';
 
     h += '<div class="an-sub">두통 시작 1~3일 전의 공통점</div>' +
       '<table class="an-table"><tr><th></th><th>두통 1~3일 전</th><th>그 외 날</th></tr>' +
@@ -431,6 +463,7 @@
     h += '<p class="an-note" style="margin:12px 0 0">빨간 막대는 그 인자가 있던 날의 두통 비율, 세로선은 없던 날의 비율이에요. ' +
       '함께 나타난 정도를 보여줄 뿐 원인을 확정하는 것은 아니에요.</p>';
     box.innerHTML = h;
+    $('anSum').textContent = summaryLine(a, avg);
     box.querySelectorAll('.an-item .t span').forEach((el, i) => { el.textContent = a.found[i].name; });
   }
 
