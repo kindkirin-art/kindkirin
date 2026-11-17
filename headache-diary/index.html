@@ -182,7 +182,7 @@
   <h2>최근 기록</h2>
   <div class="stats">
     <div><b id="sFree">0</b><span>두통 없는 날 연속</span></div>
-    <div><b id="sHA">0</b><span>최근 30일 두통(일)</span></div>
+    <div><b id="sHA">0</b><span>최근 30일 두통 있음(일)</span></div>
     <div><b id="sMed">0</b><span>최근 30일 약 복용(일)</span></div>
   </div>
   <ul class="hist" id="hist"></ul>
@@ -286,15 +286,15 @@
   let histOpen = false;
   function renderHistory() {
     const all = Object.keys(db).sort().reverse();
-    // 통계: 두통 없는 날 연속(오늘 기록이 없으면 어제부터), 최근 30일(오늘 포함) 두통·약 복용 일수
+    // 통계: "두통 있음(2)" 없는 날 연속(오늘 기록이 없으면 어제부터), 최근 30일(오늘 포함) 두통 있음·약 복용 일수. "조금(1)"은 두통으로 세지 않음
     const t = ymd(new Date());
     let d = db[t] && db[t].headache != null ? t : addDays(t, -1), free = 0;
-    while (db[d] && db[d].headache === 0) { free++; d = addDays(d, -1); }
+    while (db[d] && db[d].headache != null && db[d].headache !== 2) { free++; d = addDays(d, -1); }
     const from = addDays(t, -29);
     let ha = 0, med = 0;
     all.forEach((k) => {
       if (k < from || k > t) return;
-      if (isHA(db[k])) ha++;
+      if (db[k].headache === 2) ha++;
       if (db[k].tylenol || db[k].rxMed) med++;
     });
     $('sFree').textContent = free; $('sHA').textContent = ha; $('sMed').textContent = med;
