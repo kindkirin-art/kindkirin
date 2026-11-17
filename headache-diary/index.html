@@ -172,6 +172,11 @@
     <label class="check"><input type="checkbox" id="exercise"> 7. 운동함</label>
   </section>
 
+  <!-- 8. 자위 -->
+  <section class="card">
+    <label class="check"><input type="checkbox" id="masturb"> 8. 자위함</label>
+  </section>
+
   <div class="status" id="status"></div>
 
   <h2>최근 기록</h2>
@@ -255,6 +260,7 @@
     $('lunch').value = e.lunch || '';
     $('dinner').value = e.dinner || '';
     $('exercise').checked = !!e.exercise;
+    $('masturb').checked = !!e.masturb;
     renderHistory();
     renderAnalysis();
     if (typeof renderBackupInfo === 'function') renderBackupInfo();
@@ -309,6 +315,7 @@
       if (e.sleep !== '' && e.sleep != null) parts.push('수면 ' + e.sleep + 'h');
       if (e.stress) parts.push('스트레스 ' + e.stress);
       if (e.exercise) parts.push('운동');
+      if (e.masturb) parts.push('자위');
       li.innerHTML = '<span class="dot h' + (e.headache ?? '') + '"></span><span class="d"></span><span class="m"></span>';
       li.querySelector('.d').textContent = label(k);
       li.querySelector('.m').textContent = parts.join(' · ') || '-';
@@ -355,13 +362,14 @@
     // 1) 두통 시작 1~3일 전 vs 그 외 날
     const pre = {};
     Object.keys(onset).forEach((k) => { [1, 2, 3].forEach((n) => { pre[addDays(k, -n)] = true; }); });
-    const grp = { pre: { sl: [], st: [], ex: [] }, etc: { sl: [], st: [], ex: [] } };
+    const grp = { pre: { sl: [], st: [], ex: [], ma: [] }, etc: { sl: [], st: [], ex: [], ma: [] } };
     Object.keys(db).forEach((k) => {
       const e = db[k]; if (!e) return;
       const g = pre[k] ? grp.pre : grp.etc;
       if (hasSleep(e)) g.sl.push(Number(e.sleep));
       if (e.stress) g.st.push(e.stress);
       g.ex.push(e.exercise ? 1 : 0);
+      g.ma.push(e.masturb ? 1 : 0);
     });
 
     // 2) 인자별: 인자가 있던 날의 n일 뒤 두통 시작 비율 vs 인자가 없던 날
@@ -370,6 +378,7 @@
       { name: '수면 9시간 이상', known: hasSleep, on: (e) => Number(e.sleep) >= 9 },
       { name: '스트레스 7 이상', known: (e) => !!e.stress, on: (e) => e.stress >= 7 },
       { name: '운동 안 함', known: () => true, on: (e) => !e.exercise },
+      { name: '자위함', known: () => true, on: (e) => !!e.masturb },
       { name: '아침 거름(미기록)', known: () => true, on: (e) => !e.breakfast },
       { name: '점심 거름(미기록)', known: () => true, on: (e) => !e.lunch },
       { name: '저녁 거름(미기록)', known: () => true, on: (e) => !e.dinner }
@@ -450,7 +459,9 @@
       '<tr><td>평균 수면</td><td>' + f1(avg(g.pre.sl), 'h') + '</td><td>' + f1(avg(g.etc.sl), 'h') + '</td></tr>' +
       '<tr><td>평균 스트레스</td><td>' + f1(avg(g.pre.st), '') + '</td><td>' + f1(avg(g.etc.st), '') + '</td></tr>' +
       '<tr><td>운동한 날</td><td>' + (g.pre.ex.length ? pct(avg(g.pre.ex)) : '-') + '</td><td>' +
-      (g.etc.ex.length ? pct(avg(g.etc.ex)) : '-') + '</td></tr></table>';
+      (g.etc.ex.length ? pct(avg(g.etc.ex)) : '-') + '</td></tr>' +
+      '<tr><td>자위한 날</td><td>' + (g.pre.ma.length ? pct(avg(g.pre.ma)) : '-') + '</td><td>' +
+      (g.etc.ma.length ? pct(avg(g.etc.ma)) : '-') + '</td></tr></table>';
 
     h += '<div class="an-sub">의심되는 유발 인자</div>';
     if (!a.found.length) {
@@ -486,6 +497,7 @@
   $('rxMed').addEventListener('change', (ev) => save({ rxMed: ev.target.checked }));
   $('tylenol').addEventListener('change', (ev) => save({ tylenol: ev.target.checked }));
   $('exercise').addEventListener('change', (ev) => save({ exercise: ev.target.checked }));
+  $('masturb').addEventListener('change', (ev) => save({ masturb: ev.target.checked }));
 
   function stepSleep(delta) {
     let v = parseFloat($('sleep').value);
@@ -525,11 +537,11 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
   $('exportCsv').addEventListener('click', () => {
-    const cols = ['날짜', '두통(0~2)', '자고나서생김', '타이레놀복용', '처방약복용', '수면시간', '아침', '점심', '저녁', '스트레스(1~10)', '운동'];
+    const cols = ['날짜', '두통(0~2)', '자고나서생김', '타이레놀복용', '처방약복용', '수면시간', '아침', '점심', '저녁', '스트레스(1~10)', '운동', '자위'];
     const esc = (v) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
     const rows = Object.keys(db).sort().map((k) => {
       const e = db[k];
-      return [k, e.headache ?? '', e.afterSleep ? 'O' : '', e.tylenol ? 'O' : '', e.rxMed ? 'O' : '', e.sleep ?? '', e.breakfast, e.lunch, e.dinner, e.stress ?? '', e.exercise ? 'O' : ''].map(esc).join(',');
+      return [k, e.headache ?? '', e.afterSleep ? 'O' : '', e.tylenol ? 'O' : '', e.rxMed ? 'O' : '', e.sleep ?? '', e.breakfast, e.lunch, e.dinner, e.stress ?? '', e.exercise ? 'O' : '', e.masturb ? 'O' : ''].map(esc).join(',');
     });
     download('headache-diary-' + ymd(new Date()) + '.csv', '﻿' + [cols.map(esc).join(',')].concat(rows).join('\n'), 'text/csv');
   });
