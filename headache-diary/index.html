@@ -326,7 +326,8 @@
 
   // ───── 두통 유발 인자 분석 ─────
   function addDays(s, n) { const d = parse(s); d.setDate(d.getDate() + n); return ymd(d); }
-  const isHA = (e) => !!e && (e.headache === 1 || e.headache === 2);
+  // 분석에서는 "2 있음"만 두통으로 셈 ("1 조금"은 두통 없는 날로 취급)
+  const isHA = (e) => !!e && e.headache === 2;
   const hasSleep = (e) => e.sleep !== '' && e.sleep != null;
   function foods(e) {
     const set = new Set();
@@ -443,14 +444,14 @@
     const box = $('analysis');
     const a = analyze();
     if (a.nDays < 7 || a.nOnset < 2) {
-      box.innerHTML = '<p class="an-note" style="margin:0">분석하려면 기록 7일 이상, 두통 2회 이상이 필요해요.<br>현재 기록 ' +
-        a.nDays + '일 · 두통 ' + a.nOnset + '회</p>';
+      box.innerHTML = '<p class="an-note" style="margin:0">분석하려면 기록 7일 이상, 두통 있음 2회 이상이 필요해요.<br>현재 기록 ' +
+        a.nDays + '일 · 두통 있음 ' + a.nOnset + '회</p>';
       return;
     }
     const avg = (arr) => arr.length ? arr.reduce((x, y) => x + y, 0) / arr.length : null;
     const f1 = (v, unit) => v == null ? '-' : (Math.round(v * 10) / 10) + unit;
     const g = a.grp;
-    let h = '<p class="an-note">기록 ' + a.nDays + '일 · 두통 ' + a.nOnset + '회 기준' +
+    let h = '<p class="an-note">기록 ' + a.nDays + '일 · 두통 있음 ' + a.nOnset + '회 기준' +
       (a.nDays < 30 ? ' (기록이 적어 아직은 참고용이에요)' : '') + '</p>' +
       '<p class="an-sum" id="anSum"></p>';
 
