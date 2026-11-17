@@ -182,15 +182,16 @@
   <ul class="hist" id="hist"></ul>
   <button class="more" id="histMore" hidden></button>
 
-  <div class="tools">
+  <h2>두통 유발 인자 분석</h2>
+  <section class="card" id="analysis"></section>
+
+  <h2>백업</h2>
+  <div class="tools" style="margin-top:0">
     <button id="exportCsv">CSV 내보내기</button>
     <button id="exportJson">드라이브 백업</button>
     <label>백업 불러오기<input type="file" id="importJson" accept=".txt,.json,text/plain,application/json" hidden></label>
   </div>
   <p class="backup-info" id="backupInfo"></p>
-
-  <h2>두통 유발 인자 분석</h2>
-  <section class="card" id="analysis"></section>
 </main>
 
 <script>
