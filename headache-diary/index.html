@@ -73,6 +73,7 @@
   .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; background: var(--line); }
   .dot.h0 { background: var(--ok); } .dot.h1 { background: var(--warn); } .dot.h2 { background: var(--bad); }
   .hist .d { font-weight: 600; min-width: 84px; }
+  .more { width: 100%; height: 40px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--accent); font-size: 14px; font-family: inherit; }
   .hist .m { color: var(--muted); font-size: 13px; flex: 1; }
   .tools { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 12px; }
   .tools button, .tools label {
@@ -169,6 +170,7 @@
 
   <h2>최근 기록</h2>
   <ul class="hist" id="hist"></ul>
+  <button class="more" id="histMore" hidden></button>
 
   <div class="tools">
     <button id="exportCsv">CSV 내보내기</button>
@@ -262,11 +264,16 @@
     render();
   }
 
+  let histOpen = false;
   function renderHistory() {
-    const keys = Object.keys(db).sort().reverse().slice(0, 30);
+    const all = Object.keys(db).sort().reverse();
+    const keys = histOpen ? all : all.slice(0, 3);
     const ul = $('hist');
+    const more = $('histMore');
     ul.innerHTML = '';
-    if (!keys.length) { ul.innerHTML = '<li class="empty">아직 기록이 없어요</li>'; return; }
+    more.hidden = all.length <= 3;
+    more.textContent = histOpen ? '접기 ▲' : '이전 기록 더보기 (' + (all.length - 3) + '개) ▼';
+    if (!all.length) { ul.innerHTML = '<li class="empty">아직 기록이 없어요</li>'; return; }
     keys.forEach((k) => {
       const e = db[k];
       const li = document.createElement('li');
@@ -407,6 +414,7 @@
   }
 
   // 이벤트
+  $('histMore').addEventListener('click', () => { histOpen = !histOpen; renderHistory(); });
   $('headache').addEventListener('click', (ev) => {
     const b = ev.target.closest('button'); if (!b) return;
     const v = Number(b.dataset.v);
