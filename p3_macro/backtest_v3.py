@@ -1,28 +1,31 @@
-"""P3 v2(채택안)에 VIX 필터를 붙인 백테스트, 1986-09 ~ 현재.
+"""P3 v3: v2 채택안에 1차 매수 VIX 다이버전스 조건을 더한 백테스트, 1986-09 ~ 현재.
 
-p3_macro/backtest_v2.py 의 run()을 그대로 옮기고 VIX 조건만 더했습니다.
-VIX(^VIX)는 1990-01부터 있어서, 그 전(1986~1989)은 VIX 조건을 충족한 것으로 봅니다.
+backtest_v2.py 의 run()을 그대로 옮기고 VIX 조건만 더했습니다.
+채택 규칙(V3): 1차 매수일 VIX 종가 <= L일 VIX x 0.90
+  L일 VIX = 최저 종가 L을 기록한 날의 VIX 종가. L이 바뀔 때(감시·연준 단계의 저점 갱신,
+  재시험 실패, 손절) 함께 바꿉니다. 가격 조건만 맞고 VIX 조건이 안 맞으면 사지 않고 기다립니다.
+VIX(data/vix.csv, Yahoo ^VIX)는 1990-01부터 있어서, 그 전(1986~1989)은 VIX 조건을 충족한 것으로 봅니다.
 
-필터 (P 의 키)
+비교용 필터 (P 의 키)
 - b1     : 1차 매수에 붙이는 조건
-    ("peak", x)  VIX 종가 <= 감시 시작 이후 VIX 최고 종가 x (1 - x)   ... 'VIX 낮은 고점'
-    ("lday", x)  VIX 종가 <= L(최저 종가)을 찍은 날의 VIX x (1 - x)   ... 바닥 재시험 때 VIX 다이버전스
-    ("fall", n)  VIX 종가 < VIX n일 단순이동평균                      ... VIX 하락 중
-    ("sma", n, k) VIX 종가 <= VIX n일 단순이동평균 x k                ... VIX 재상승 중이 아님
+    ("lday", x)   VIX 종가 <= L일 VIX x (1 - x)                 ... 채택 (x = 0.10)
+    ("peak", x)   VIX 종가 <= 감시 시작 이후 VIX 최고 종가 x (1 - x)
+    ("sma", n, k) VIX 종가 <= VIX n일 단순이동평균 x k
 - b2     : 2차 매수에 붙이는 조건 ("peak", x) 또는 ("lvl", v): VIX 종가 <= v
-- size   : 1차 매수 비중 (기본 0.5). b1을 통과하지 못하면 매수하지 않음
 - asset  : 매매 대상 'qqq' / 'qld' / 'tqqq' (신호는 언제나 QQQ)
+
+python backtest_v3.py  # → v3_filters.csv, v3_leverage.csv, v3_trades.csv
 """
 import os
-import sys
 import numpy as np
 import pandas as pd
 
+from backtest_v2 import V2, FINAL, alarms, setup, trade_table, stats
+
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(HERE, "..", "p3_macro"))
-from backtest_v2 import V2, FINAL, alarms, setup, trade_table, stats  # noqa: E402
 
 P0 = {**V2, **FINAL, "b1": None, "b2": None, "size": 0.5, "asset": "qqq"}
+V3 = {**P0, "b1": ("lday", 0.10)}   # 채택: 1차 매수일 VIX <= L일 VIX x 0.90
 
 
 def load():
@@ -45,8 +48,6 @@ def vok(cond, vix, i, ep, vsma):
         return vix[i] <= ep["vmax"] * (1 - a)
     if kind == "lday":
         return np.isnan(ep["vL"]) or vix[i] <= ep["vL"] * (1 - a)
-    if kind == "fall":
-        return vix[i] < vsma[a][i]
     if kind == "lvl":
         return vix[i] <= a
     raise ValueError(kind)
@@ -56,7 +57,7 @@ def run(df, P, fed, reentry, rf):
     al, alarm = alarms(df, P)
     q, hy, hi52, sma, sofr = (df[c].values for c in ("qqq", "hy", "hi52", "sma50", "sofr_ior"))
     vix = df.vix.values
-    vsma = {n: df.vix.rolling(n).mean().values for n in (5, 10, 20, 50)}
+    vsma = {n: df.vix.rolling(n).mean().values for n in (5, 10, 20)}
     x = df[P["asset"]].values
     idx = df.index
     trades, eps = [], []
@@ -131,3 +132,62 @@ def run(df, P, fed, reentry, rf):
         tr.update(exit=None, exit_px=x[-1], how="보유 중")
         trades.append(tr)
     return trades, eps, pd.Series(eq, index=idx), state
+
+
+def filter_variants():
+    out = {"v2 (VIX 필터 없음)": {}}
+    for x in (0.0, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30):
+        out[f"1차: VIX <= L일 VIX x{1 - x:.2f}"] = dict(b1=("lday", x))
+    for x in (0.1, 0.2, 0.3):
+        out[f"1차: VIX <= 감시 후 최고 x{1 - x:.1f}"] = dict(b1=("peak", x))
+    for n in (5, 10, 20):
+        for k in (1.0, 1.05, 1.1):
+            out[f"1차: VIX <= {n}일선 x{k:.2f}"] = dict(b1=("sma", n, k))
+    for v in (30, 40):
+        out[f"2차: VIX <= {v}"] = dict(b2=("lvl", v))
+    out["2차: VIX <= 감시 후 최고 x0.6"] = dict(b2=("peak", 0.4))
+    return out
+
+
+def split_mult(trades, a=None, b=None):
+    tt = [x for x in trades if (a is None or x["b1"] >= pd.Timestamp(a)) and (b is None or x["b1"] <= pd.Timestamp(b))]
+    r = [((x["exit_px"] / x["b1_px"] - 1) + ((x["exit_px"] / x["b2_px"] - 1) if x["b2"] is not None else 0)) / 2
+         for x in tt]
+    return round(float(np.prod([1 + v for v in r])), 2) if r else 1.0
+
+
+if __name__ == "__main__":
+    pd.set_option("display.width", 250, "display.max_columns", 30)
+    df, fed, reentry, rf = load()
+
+    rows = []
+    for name, opt in filter_variants().items():
+        t, e, eq, st = run(df, {**P0, **opt}, fed, reentry, rf)
+        rows.append({"변형": name, **stats(t, eq), "~2004 배수": split_mult(t, b="2004-12-31"),
+                     "2005~ 배수": split_mult(t, a="2005-01-01")})
+    grid = pd.DataFrame(rows)
+    print(grid.to_string(index=False))
+    grid.to_csv(os.path.join(HERE, "v3_filters.csv"), index=False)
+
+    rows = []
+    for asset in ("qqq", "qld", "tqqq"):
+        for name, P in (("v2", P0), ("v3", V3)):
+            t, e, eq, st = run(df, {**P, "asset": asset}, fed, reentry, rf)
+            rows.append({"자산": asset.upper(), "규칙": name, **stats(t, eq)})
+    lev = pd.DataFrame(rows)
+    print("\n" + lev.to_string(index=False))
+    lev.to_csv(os.path.join(HERE, "v3_leverage.csv"), index=False)
+
+    t, e, eq, st = run(df, V3, fed, reentry, rf)
+    tt = trade_table(t)
+    tt["VIX"] = [round(x["b1_vix"], 1) for x in t]
+    tt["L일 VIX"] = [round(x["vL"], 1) for x in t]
+    print(f"\nv3 매매 내역 (감시 {len(e)}번, 현재 단계 {st})")
+    print(tt.round(1).to_string())
+    tt.round(2).to_csv(os.path.join(HERE, "v3_trades.csv"), index=False)
+    held = sum(((eq.index >= x["b1"]) & (eq.index < (x["exit"] or eq.index[-1]))).sum() for x in t) / len(eq)
+    print(f"투자 중인 날 비율 약 {held * 100:.1f}%")
+    for s in (0.06, 0.08, 0.10, 0.12, 0.15, 0.20):
+        t2, _, q2, _ = run(df, {**V3, "stop": s}, fed, reentry, rf)
+        r = stats(t2, q2)
+        print(f"손절 {s:.0%}: 누적 {r['누적 배수']} MDD {r['자금곡선 MDD%']}%")

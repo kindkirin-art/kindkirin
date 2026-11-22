@@ -7,8 +7,7 @@ P1 포트폴리오와 그 전 단계 백테스트 코드를 한 브랜치에 모
 | `portfolio/` | P1 최종 규칙(`FINAL_RULES.md`), 원화 백테스트, 부트스트랩, 현재 신호 스크립트 |
 | `btc_120ma/` | 비트코인 이동평균 추세추종 백테스트 (업비트 원화) |
 | `tqqq_200ma/` | TQQQ 200일선 스위칭 백테스트 |
-| `p3_macro/` | P3 위기 바닥 매수 신호 (QQQ) 백테스트 (옛 브랜치 `ccr-5a9d780f-b1cjxt`에서 가져옴) |
-| `p3_vix/` | 역P3: P3 단계를 거꾸로 써서 VIX 숏볼 |
+| `p3_macro/` | P3 위기 바닥 매수 신호 (QQQ) 백테스트. 현재 규칙 v3(VIX 다이버전스 필터 포함), v1·v2 기록 |
 | `archive/tqqq-qld-strategy/` | TQQQ/QLD 포트폴리오 전략, 세후 계산, 몬테카를로 (옛 브랜치 `claude/tqqq-qld-portfolio-strategy-aon7le`) |
 | `archive/long-backtest-1991/` | 1991년부터의 장기 백테스트 (옛 브랜치 `ccr-f33beb76-nbaogs`) |
 | `archive/switch-take-profit-2018/` | 2018년부터의 스위칭 익절 백테스트 (옛 브랜치 `claude/sweet-bell-k50052`) |
