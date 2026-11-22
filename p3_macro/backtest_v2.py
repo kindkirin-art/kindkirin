@@ -6,8 +6,10 @@ backtest.py의 기준 규칙 위에 아래 옵션을 켜고 끕니다.
             trend_ma=200 이면 QQQ 종가 > QQQ 200일선 도 요구.
 - credit  : 연준 조치가 없어도 HY <= HYmax - credit_drop 이면 2단계 통과로 인정.
 - dd      : 감시 시작 하락 기준 (기본 0.20).
-- stop    : 손절 폭. stop_ref='L'  -> 종가 < (매수 시점 L) x (1 - stop)
-                     stop_ref='entry' -> 종가 < 1차 매수가 x (1 - stop)
+- stop    : 손절 폭. stop_ref='L'  -> QQQ 종가 < (매수 시점 L) x (1 - stop)
+                     stop_ref='entry' -> QQQ 종가 < 1차 매수 시점 QQQ 종가 x (1 - stop)
+                     stop_ref='asset' -> 매매 대상 종가 < 1차 매수가 x (1 - stop)
+- asset   : 매매 대상 열 (기본 'qqq'; 'qld', 'tqqq'). 신호 판단은 언제나 QQQ.
             손절하면 전량 매도하고 2단계 통과 상태(첫 반등 대기)로 돌아가 L을 다시 갱신.
             같은 감시 안에서 다시 살 수 있음.
 2차 매수, 매도(P1 재진입) 규칙은 기준과 같습니다.
@@ -35,6 +37,7 @@ def alarms(df, P):
 def run(df, P, fed, reentry, rf):
     al, alarm = alarms(df, P)
     q, hy, hi52, sma, sofr = (df[c].values for c in ("qqq", "hy", "hi52", "sma50", "sofr_ior"))
+    x = df[P.get("asset", "qqq")].values   # 매매 대상 가격 (신호는 언제나 QQQ)
     tma = df.qqq.rolling(P["trend_ma"]).mean().values if P["trend_ma"] else np.full(len(df), -np.inf)
     idx = df.index
     trades, eps = [], []
@@ -44,8 +47,8 @@ def run(df, P, fed, reentry, rf):
 
     def close_trade(i, how):
         nonlocal cash, units, tr
-        cash += units * q[i]; units = 0.0
-        tr.update(exit=idx[i], exit_px=q[i], how=how)
+        cash += units * x[i]; units = 0.0
+        tr.update(exit=idx[i], exit_px=x[i], how=how)
         trades.append(tr); tr = None
 
     for i, d in enumerate(idx):
@@ -79,7 +82,7 @@ def run(df, P, fed, reentry, rf):
         if state == "FED":
             if c >= ep["L"] * (1 + P["rebound"]):
                 state = "REB"
-            eq[i] = cash + units * c; continue
+            eq[i] = cash + units * x[i]; continue
         if state == "REB":
             path = None
             if c < ep["L"] * (1 - P["band_lo"]):
@@ -90,15 +93,19 @@ def run(df, P, fed, reentry, rf):
                 path = "추세"
             if path:
                 half = cash / 2
-                units += half / c; cash -= half
-                tr = dict(watch=ep["watch"], gate=ep["gate"], path=path, b1=d, b1_px=c,
+                units += half / x[i]; cash -= half
+                tr = dict(watch=ep["watch"], gate=ep["gate"], path=path, b1=d, b1_px=x[i], b1_q=c,
                           L=ep["L"], b2=None, b2_px=None)
                 state = "HOLD1"
-            eq[i] = cash + units * c; continue
+            eq[i] = cash + units * x[i]; continue
         if state in ("HOLD1", "HOLD2"):
             if P["stop"] is not None:
-                ref = tr["L"] if P["stop_ref"] == "L" else tr["b1_px"]
-                if c < ref * (1 - P["stop"]):
+                if P["stop_ref"] == "asset":   # 매매 대상 가격 기준
+                    hit = x[i] < tr["b1_px"] * (1 - P["stop"])
+                else:                          # QQQ 기준 (L 또는 1차 매수 시점 QQQ 종가)
+                    ref = tr["L"] if P["stop_ref"] == "L" else tr["b1_q"]
+                    hit = c < ref * (1 - P["stop"])
+                if hit:
                     close_trade(i, "손절")
                     ep["L"] = c
                     state = "FED"
@@ -106,12 +113,12 @@ def run(df, P, fed, reentry, rf):
             if state == "HOLD1":
                 so = sofr[i]
                 if h <= ep["hymax"] - P["hy_drop2"] and c > sma[i] and (np.isnan(so) or so < P["sofr_ok"]):
-                    units += cash / c; cash = 0.0
-                    tr.update(b2=d, b2_px=c)
+                    units += cash / x[i]; cash = 0.0
+                    tr.update(b2=d, b2_px=x[i])
                     state = "HOLD2"
-        eq[i] = cash + units * c
+        eq[i] = cash + units * x[i]
     if tr is not None:
-        tr.update(exit=None, exit_px=q[-1], how="보유 중")
+        tr.update(exit=None, exit_px=x[-1], how="보유 중")
         trades.append(tr)
     return trades, eps, pd.Series(eq, index=idx), state
 
